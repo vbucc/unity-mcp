@@ -110,6 +110,43 @@ namespace MCPForUnity.Editor.Helpers
             }
         }
 
+        /// <summary>
+        /// Gets per-property prefab override status for a component.
+        /// Uses SerializedObject/SerializedProperty to detect which properties differ from prefab.
+        /// Returns null if not a prefab instance or on error.
+        /// </summary>
+        public static Dictionary<string, bool> GetPrefabPropertyOverrides(Component component)
+        {
+            if (component == null) return null;
+
+            try
+            {
+                GameObject go = component.gameObject;
+                if (!PrefabUtility.IsPartOfPrefabInstance(go))
+                    return null;
+
+                var overrides = new Dictionary<string, bool>();
+                var serializedObj = new SerializedObject(component);
+                var prop = serializedObj.GetIterator();
+
+                // Iterate all serialized properties
+                while (prop.Next(true))
+                {
+                    // Skip internal Unity properties (m_Script, m_ObjectHideFlags, etc.)
+                    if (prop.propertyPath.StartsWith("m_")) continue;
+
+                    overrides[prop.propertyPath] = prop.prefabOverride;
+                }
+
+                serializedObj.Dispose();
+                return overrides.Count > 0 ? overrides : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         // --- End Helper Methods ---
 
         // --- Data Serialization ---
@@ -218,7 +255,7 @@ namespace MCPForUnity.Editor.Helpers
         /// public properties and fields using reflection, with caching and control over non-public fields.
         /// </summary>
         // Add the flag parameter here
-        public static object GetComponentData(Component c, bool includeNonPublicSerializedFields = true)
+        public static object GetComponentData(Component c, bool includeNonPublicSerializedFields = true, bool includePrefabOverrides = false)
         {
             // --- Add Early Logging --- 
             // Debug.Log($"[GetComponentData] Starting for component: {c?.GetType()?.FullName ?? "null"} (ID: {c?.GetInstanceID() ?? 0})");
@@ -532,6 +569,16 @@ namespace MCPForUnity.Editor.Helpers
             if (serializablePropertiesOutput.Count > 0)
             {
                 data["properties"] = serializablePropertiesOutput;
+            }
+
+            // Add prefab property overrides if requested
+            if (includePrefabOverrides)
+            {
+                var overrides = GetPrefabPropertyOverrides(c);
+                if (overrides != null)
+                {
+                    data["prefabOverrides"] = overrides;
+                }
             }
 
             return data;

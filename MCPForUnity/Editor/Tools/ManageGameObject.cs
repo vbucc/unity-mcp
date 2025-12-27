@@ -77,6 +77,10 @@ namespace MCPForUnity.Editor.Tools
             bool includeNonPublicSerialized = @params["includeNonPublicSerialized"]?.ToObject<bool>() ?? true; // Default to true
             // --- End add parameter ---
 
+            // --- Add parameter for prefab override detection ---
+            bool includePrefabOverrides = @params["includePrefabOverrides"]?.ToObject<bool>() ?? false; // Default to false for performance
+            // --- End add parameter ---
+
             // Coerce string JSON to JObject for 'componentProperties' if provided as a JSON string
             var componentPropsToken = @params["componentProperties"];
             if (componentPropsToken != null && componentPropsToken.Type == JTokenType.String)
@@ -180,8 +184,8 @@ namespace MCPForUnity.Editor.Tools
                             return new ErrorResponse(
                                 "'target' parameter required for get_components."
                             );
-                        // Pass the includeNonPublicSerialized flag here
-                        return GetComponentsFromTarget(getCompTarget, searchMethod, includeNonPublicSerialized);
+                        // Pass the includeNonPublicSerialized and includePrefabOverrides flags here
+                        return GetComponentsFromTarget(getCompTarget, searchMethod, includeNonPublicSerialized, includePrefabOverrides);
                     case "get_component":
                         string getSingleCompTarget = targetToken?.ToString();
                         if (getSingleCompTarget == null)
@@ -193,7 +197,7 @@ namespace MCPForUnity.Editor.Tools
                             return new ErrorResponse(
                                 "'componentName' parameter required for get_component."
                             );
-                        return GetSingleComponentFromTarget(getSingleCompTarget, searchMethod, componentName, includeNonPublicSerialized);
+                        return GetSingleComponentFromTarget(getSingleCompTarget, searchMethod, componentName, includeNonPublicSerialized, includePrefabOverrides);
                     case "add_component":
                         return AddComponentToTarget(@params, targetToken, searchMethod);
                     case "remove_component":
@@ -1191,7 +1195,7 @@ namespace MCPForUnity.Editor.Tools
             return new SuccessResponse($"Found {results.Count} GameObject(s).", results);
         }
 
-        private static object GetComponentsFromTarget(string target, string searchMethod, bool includeNonPublicSerialized = true)
+        private static object GetComponentsFromTarget(string target, string searchMethod, bool includeNonPublicSerialized = true, bool includePrefabOverrides = false)
         {
             GameObject targetGo = FindObjectInternal(target, searchMethod);
             if (targetGo == null)
@@ -1227,7 +1231,7 @@ namespace MCPForUnity.Editor.Tools
                     // Debug.Log($"[GetComponentsFromTarget REVERSE for] Processing component: {c.GetType()?.FullName ?? "null"} (ID: {c.GetInstanceID()}) at index {i} on {targetGo.name}");
                     try
                     {
-                        var data = Helpers.GameObjectSerializer.GetComponentData(c, includeNonPublicSerialized);
+                        var data = Helpers.GameObjectSerializer.GetComponentData(c, includeNonPublicSerialized, includePrefabOverrides);
                         if (data != null) // Ensure GetComponentData didn't return null
                         {
                             componentData.Insert(0, data); // Insert at beginning to maintain original order in final list
@@ -1267,7 +1271,7 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        private static object GetSingleComponentFromTarget(string target, string searchMethod, string componentName, bool includeNonPublicSerialized = true)
+        private static object GetSingleComponentFromTarget(string target, string searchMethod, string componentName, bool includeNonPublicSerialized = true, bool includePrefabOverrides = false)
         {
             GameObject targetGo = FindObjectInternal(target, searchMethod);
             if (targetGo == null)
@@ -1309,7 +1313,7 @@ namespace MCPForUnity.Editor.Tools
                     );
                 }
 
-                var componentData = Helpers.GameObjectSerializer.GetComponentData(targetComponent, includeNonPublicSerialized);
+                var componentData = Helpers.GameObjectSerializer.GetComponentData(targetComponent, includeNonPublicSerialized, includePrefabOverrides);
 
                 if (componentData == null)
                 {

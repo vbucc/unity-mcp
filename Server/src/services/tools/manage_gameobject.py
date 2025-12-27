@@ -68,6 +68,9 @@ async def manage_gameobject(
     # Controls whether serialization of private [SerializeField] fields is included
     includeNonPublicSerialized: Annotated[bool | str,
                                           "Controls whether serialization of private [SerializeField] fields is included (accepts true/false or 'true'/'false')"] | None = None,
+    # Controls whether per-property prefab override detection is included
+    includePrefabOverrides: Annotated[bool | str,
+                                      "If True, includes per-property prefab override status in the response (accepts true/false or 'true'/'false')"] | None = None,
     # --- Parameters for 'duplicate' ---
     new_name: Annotated[str,
                         "New name for the duplicated object (default: SourceName_Copy)"] | None = None,
@@ -134,6 +137,7 @@ async def manage_gameobject(
     search_in_children = coerce_bool(search_in_children)
     search_inactive = coerce_bool(search_inactive)
     includeNonPublicSerialized = coerce_bool(includeNonPublicSerialized)
+    includePrefabOverrides = coerce_bool(includePrefabOverrides)
     world_space = coerce_bool(world_space, default=True)
 
     # Coerce 'component_properties' from JSON string to dict for client compatibility
@@ -194,6 +198,7 @@ async def manage_gameobject(
             "searchInactive": search_inactive,
             "componentName": component_name,
             "includeNonPublicSerialized": includeNonPublicSerialized,
+            "includePrefabOverrides": includePrefabOverrides,
             # Parameters for 'duplicate'
             "new_name": new_name,
             "offset": offset,
