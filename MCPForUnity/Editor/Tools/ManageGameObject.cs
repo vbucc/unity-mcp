@@ -1909,6 +1909,18 @@ namespace MCPForUnity.Editor.Tools
 
                 try
                 {
+                    // Check for problematic struct + find instruction pattern (Animation Rigging, etc.)
+                    Type fieldType = GetMemberType(targetComponent.GetType(), propName);
+                    if (fieldType != null && IsProblematicStructType(fieldType) && ContainsFindInstruction(propValue))
+                    {
+                        string warning = $"Setting object references inside struct type '{fieldType.Name}' " +
+                                         $"is not supported. The struct will be set but object references will remain null. " +
+                                         $"Configure these in the Inspector or edit the scene file directly.";
+                        Debug.LogWarning($"[ManageGameObject] {warning}");
+                        failures.Add(warning);
+                        // Continue to set the property anyway (primitive values will work)
+                    }
+
                     bool setResult = SetProperty(targetComponent, propName, propValue);
                     if (!setResult)
                     {
@@ -2359,6 +2371,76 @@ namespace MCPForUnity.Editor.Tools
             return new Bounds(Vector3.zero, Vector3.zero);
         }
         // --- End Redundant Parse Helpers ---
+
+        /// <summary>
+        /// Recursively checks if a JToken contains any {"find": ...} instructions.
+        /// Used to detect when object references are being set inside structs (which fails silently).
+        /// </summary>
+        private static bool ContainsFindInstruction(JToken token)
+        {
+            if (token is JObject obj)
+            {
+                if (obj.ContainsKey("find"))
+                    return true;
+                foreach (var prop in obj.Properties())
+                {
+                    if (ContainsFindInstruction(prop.Value))
+                        return true;
+                }
+            }
+            else if (token is JArray arr)
+            {
+                foreach (var item in arr)
+                {
+                    if (ContainsFindInstruction(item))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Gets the type of a field or property by name. Returns null if not found.
+        /// </summary>
+        private static Type GetMemberType(Type type, string memberName)
+        {
+            BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
+
+            PropertyInfo propInfo = type.GetProperty(memberName, flags);
+            if (propInfo != null)
+                return propInfo.PropertyType;
+
+            FieldInfo fieldInfo = type.GetField(memberName, flags);
+            if (fieldInfo != null)
+                return fieldInfo.FieldType;
+
+            // Try NonPublic [SerializeField] fields
+            var npField = type.GetField(memberName, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (npField != null && npField.GetCustomAttribute<SerializeField>() != null)
+                return npField.FieldType;
+
+            return null;
+        }
+
+        /// <summary>
+        /// Checks if a type is a struct that can't properly deserialize nested object references.
+        /// Animation Rigging constraints (TwoBoneIKConstraintData, etc.) fall into this category.
+        /// </summary>
+        private static bool IsProblematicStructType(Type type)
+        {
+            // Value types (structs) that aren't primitives or Unity's built-in types
+            if (!type.IsValueType || type.IsPrimitive || type.IsEnum)
+                return false;
+
+            // Allow Unity's built-in value types (Vector3, Color, etc.) - these work fine
+            if (type.Namespace == "UnityEngine" &&
+                (type == typeof(Vector3) || type == typeof(Vector2) || type == typeof(Vector4) ||
+                 type == typeof(Quaternion) || type == typeof(Color) || type == typeof(Rect) ||
+                 type == typeof(Bounds) || type == typeof(Matrix4x4)))
+                return false;
+
+            return true;
+        }
 
         /// <summary>
         /// Finds a specific UnityEngine.Object based on a find instruction JObject.

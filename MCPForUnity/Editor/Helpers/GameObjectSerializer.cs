@@ -41,6 +41,49 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
+        /// Serializes a UnityEngine.Object reference with enriched info (instanceID, name, type, paths).
+        /// Used for both single objects and array elements.
+        /// </summary>
+        private static Dictionary<string, object> SerializeUnityObjectReference(UnityEngine.Object unityObj)
+        {
+            if (unityObj == null) return null;
+
+            var refInfo = new Dictionary<string, object>
+            {
+                { "instanceID", unityObj.GetInstanceID() },
+                { "name", unityObj.name },
+                { "type", unityObj.GetType().Name }
+            };
+
+            // Add hierarchy path for scene objects (GameObjects and Components)
+            try
+            {
+                if (unityObj is GameObject refGo)
+                {
+                    refInfo["hierarchyPath"] = GetHierarchyPath(refGo.transform);
+                }
+                else if (unityObj is Component refComp && refComp.gameObject != null)
+                {
+                    refInfo["gameObjectName"] = refComp.gameObject.name;
+                    refInfo["hierarchyPath"] = GetHierarchyPath(refComp.transform);
+                }
+            }
+            catch { /* Silently fail - hierarchy info is optional */ }
+
+            // Add asset path for assets (not scene objects)
+            try
+            {
+                if (AssetDatabase.Contains(unityObj))
+                {
+                    refInfo["assetPath"] = AssetDatabase.GetAssetPath(unityObj);
+                }
+            }
+            catch { /* Silently fail - asset path is optional */ }
+
+            return refInfo;
+        }
+
+        /// <summary>
         /// Formats layer index with its name (e.g., "8 (Ragdoll)" instead of just "8").
         /// </summary>
         private static string GetLayerWithName(int layer)
@@ -623,41 +666,33 @@ namespace MCPForUnity.Editor.Helpers
                 // For Unity objects, store enriched reference info
                 if (value is UnityEngine.Object unityObj)
                 {
-                    var refInfo = new Dictionary<string, object>
-                    {
-                        { "instanceID", unityObj.GetInstanceID() },
-                        { "name", unityObj.name },
-                        { "type", type.Name }
-                    };
-
-                    // Add hierarchy path for scene objects (GameObjects and Components)
-                    try
-                    {
-                        if (unityObj is GameObject refGo)
-                        {
-                            refInfo["hierarchyPath"] = GetHierarchyPath(refGo.transform);
-                        }
-                        else if (unityObj is Component refComp && refComp.gameObject != null)
-                        {
-                            refInfo["gameObjectName"] = refComp.gameObject.name;
-                            refInfo["hierarchyPath"] = GetHierarchyPath(refComp.transform);
-                        }
-                    }
-                    catch { /* Silently fail - hierarchy info is optional */ }
-
-                    // Add asset path for assets (not scene objects)
-                    try
-                    {
-                        if (AssetDatabase.Contains(unityObj))
-                        {
-                            refInfo["assetPath"] = AssetDatabase.GetAssetPath(unityObj);
-                        }
-                    }
-                    catch { /* Silently fail - asset path is optional */ }
-
-                    dict[name] = refInfo;
+                    dict[name] = SerializeUnityObjectReference(unityObj);
                     return;
                 }
+
+                // Handle arrays of UnityEngine.Object
+                if (type.IsArray && typeof(UnityEngine.Object).IsAssignableFrom(type.GetElementType()))
+                {
+                    var array = value as Array;
+                    if (array == null)
+                    {
+                        dict[name] = null;
+                        return;
+                    }
+                    var serializedArray = new List<object>();
+                    foreach (var element in array)
+                    {
+                        if (element == null)
+                            serializedArray.Add(null);
+                        else if (element is UnityEngine.Object elementObj)
+                            serializedArray.Add(SerializeUnityObjectReference(elementObj));
+                        else
+                            serializedArray.Add(element);
+                    }
+                    dict[name] = serializedArray;
+                    return;
+                }
+
                 // Skip other complex types entirely to prevent recursion
                 return;
             }

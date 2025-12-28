@@ -167,13 +167,8 @@ namespace MCPForUnity.Editor.Helpers
 
         private static bool ShouldUseWindowsCmdShim(McpClient client)
         {
-            if (client == null)
-            {
-                return false;
-            }
-
-            return Application.platform == RuntimePlatform.WindowsEditor &&
-                   string.Equals(client.name, ClaudeDesktopConfigurator.ClientName, StringComparison.OrdinalIgnoreCase);
+            // Claude Desktop shim removed - only Claude Code is supported
+            return false;
         }
 
         private static string ResolveCmdPath()
