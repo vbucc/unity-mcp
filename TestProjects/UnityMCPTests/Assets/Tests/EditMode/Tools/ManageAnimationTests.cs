@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 using MCPForUnity.Editor.Tools.Animation;
+using MCPForUnity.Runtime.Helpers;
 using static MCPForUnityTests.Editor.TestUtilities;
 
 namespace MCPForUnityTests.Editor.Tools
@@ -2496,7 +2497,7 @@ namespace MCPForUnityTests.Editor.Tools
             var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
             var sm = controller.layers[0].stateMachine;
             var s = sm.AddState("Idle");
-            int originalId = s.GetInstanceID();
+            int originalId = s.GetInstanceIDCompat();
             AssetDatabase.SaveAssets();
 
             var result = ToJObject(ManageAnimation.HandleCommand(new JObject
@@ -2511,7 +2512,7 @@ namespace MCPForUnityTests.Editor.Tools
             controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
             var renamed = controller.layers[0].stateMachine.states[0].state;
             Assert.AreEqual("IdleStanding", renamed.name);
-            Assert.AreEqual(originalId, renamed.GetInstanceID(), "AnimatorState sub-asset identity must be preserved across rename");
+            Assert.AreEqual(originalId, renamed.GetInstanceIDCompat(), "AnimatorState sub-asset identity must be preserved across rename");
         }
 
         [Test]

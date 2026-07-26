@@ -41,6 +41,12 @@ coverage.xml
 *.asset
 LICENSE.meta
 CONTRIBUTING.md.meta
+# Editor-generated settings written on first open (code coverage, scene templates, ...)
+TestProjects/*/ProjectSettings/Packages/
+TestProjects/*/ProjectSettings/*.json
+# Empty parent folder the AssetGen tests leave behind after deleting their subfolders
+TestProjects/*/Assets/Generated/
+TestProjects/*/Assets/Generated.meta
 
 # IDE
 .idea/
