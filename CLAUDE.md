@@ -145,7 +145,9 @@ We support a wide Unity version range (2021+ → 6.x → CoreCLR 6.8). When an A
 
 The catalog of active shims, the policy for when to add one, what does NOT belong in a shim, and the reflection-cache pattern all live in **`MCPForUnity/Runtime/Helpers/UnityCompatShims.cs`** — the XML doc on that empty marker class is the source of truth and ships inside the UPM package, so end-users can `F12`/Go-to-definition into it. Sources for current deprecations: Unity 6.x upgrade guides and the [CoreCLR 2026 thread](https://discussions.unity.com/t/path-to-coreclr-2026-upgrade-guide/1714279).
 
-When you touch a shim or anything else gated by `#if UNITY_*_OR_NEWER`, run `tools/check-unity-versions.sh` to compile-check across the CI matrix locally before committing — the matrix lives in `tools/unity-versions.json`.
+The package still declares `"unity": "2021.3"` and the shims still cover the full range, but **this fork only compiles one version**: `TestProjects/UnityMCPTests` is a Unity 6.5 project (`6000.5.5f1`) and older editors cannot open it. So `tools/check-unity-versions.sh` verifies the 6.5 branch only; the older branches are covered upstream, not here. See the `$comment` in `tools/unity-versions.json` for the reasoning and for how to restore a real matrix.
+
+Consequence worth knowing when you touch a shim: a `#if` branch that is off at 6.5 is **not compiled by anything you can run locally**. Read those branches carefully rather than trusting a green local check. Unity 6.5 also escalates `Object.GetInstanceID()` from `CS0618` (warning) to `CS0619` (error) — route calls through `UnityObjectIdCompat.GetInstanceIDCompat()`.
 
 ## Commands
 
@@ -160,10 +162,10 @@ cd Server && uv run pytest tests/test_manage_material.py -v
 # Python (single test by name)
 cd Server && uv run pytest tests/ -k "test_create_material" -v
 
-# Unity - open TestProjects/UnityMCPTests in Unity, use Test Runner window
+# Unity - open TestProjects/UnityMCPTests in Unity 6000.5.5f1, use Test Runner window
 
-# Local multi-version compile check (parity with CI matrix, see tools/unity-versions.json)
-tools/check-unity-versions.sh           # compile-only across installed Unity Hub editors
+# Compile check against the pinned version (single-version on this fork, see tools/unity-versions.json)
+tools/check-unity-versions.sh           # compile-only via local Unity Hub
 tools/check-unity-versions.sh --full    # full EditMode test run
 ```
 

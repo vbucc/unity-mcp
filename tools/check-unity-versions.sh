@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
-# Local parity check for the CI Unity-version matrix.
+# Compile/test check against the Unity version(s) in tools/unity-versions.json.
+#
+# On this fork that list is a single entry — Unity CI is disabled_manually and TestProjects/UnityMCPTests
+# is saved by 6000.5.5f1, which older editors cannot open. See the $comment in unity-versions.json for
+# why the upstream four-version matrix was retired here.
 #
 # Usage:
-#   tools/check-unity-versions.sh                 # compile-only, all installed versions from tools/unity-versions.json
-#   tools/check-unity-versions.sh --full          # full EditMode test run (matches CI behavior)
-#   tools/check-unity-versions.sh --only 6000.0   # check only versions whose id starts with the given prefix
-#   tools/check-unity-versions.sh --docker        # run inside GameCI containers (no local Unity Hub install needed)
+#   tools/check-unity-versions.sh                 # compile-only, every installed version in tools/unity-versions.json
+#   tools/check-unity-versions.sh --full          # full EditMode test run
+#   tools/check-unity-versions.sh --only 6000.5   # check only versions whose id starts with the given prefix
+#   tools/check-unity-versions.sh --docker        # run inside GameCI containers (UNAVAILABLE here, see below)
 #   tools/check-unity-versions.sh --pre-push      # hint mode used by the pre-push hook (changes failure message)
 #
 # Modes:
 #   - Default (local): looks for Unity editors under Unity Hub. Versions not installed are skipped.
-#   - --docker: runs each version inside unityci/editor:ubuntu-<id>-base-<tag>. Requires UNITY_LICENSE env
-#     (contents of a .ulf file). On macOS arm64, expect ~5-10× slowdown from amd64 emulation.
+#   - --docker: runs each version inside unityci/editor:ubuntu-<id>-base-<tag>. GameCI publishes no image
+#     for 6000.5+, so this mode fails at the image pull on this fork. A local Unity Hub install is the
+#     only supported runner.
 #
 # Exits non-zero if any *checked* version fails. Versions skipped (not installed locally / image not pulled
 # in offline mode) do not cause failure on their own.
 #
-# Linked to CI: both this script and .github/workflows/unity-tests.yml read tools/unity-versions.json.
+# NOTE: this runs Unity directly against TestProjects/UnityMCPTests and upgrades it in place. Unity
+# upgrades are one-way — a newer editor than the project's pin rewrites ProjectVersion.txt.
 
 set -euo pipefail
 
@@ -51,7 +57,7 @@ while [[ $# -gt 0 ]]; do
     --docker-image-tag) require_value "$1" "${2:-}"; DOCKER_IMAGE_TAG="$2"; shift ;;
     --pre-push) PRE_PUSH=1 ;;
     -h|--help)
-      sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
