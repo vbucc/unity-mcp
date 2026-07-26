@@ -605,6 +605,10 @@ manage_material(
 )
 ```
 
+Material assets are written to disk as soon as the action succeeds. Actions that target a
+**scene** object (`assign_material_to_renderer`, `set_renderer_color`) mark the scene dirty
+instead — call `manage_scene(action="save")` to commit those.
+
 ### manage_texture
 
 Create procedural textures.

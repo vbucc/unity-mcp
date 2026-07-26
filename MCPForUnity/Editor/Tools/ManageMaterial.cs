@@ -106,7 +106,7 @@ namespace MCPForUnity.Editor.Tools
                     if (tex != null && mat.HasProperty(property))
                     {
                         mat.SetTexture(property, tex);
-                        EditorUtility.SetDirty(mat);
+                        EditorPersistence.PersistAsset(mat);
                         return new SuccessResponse($"Set texture property {property} on {mat.name}");
                     }
                 }
@@ -117,7 +117,7 @@ namespace MCPForUnity.Editor.Tools
 
             if (success)
             {
-                EditorUtility.SetDirty(mat);
+                EditorPersistence.PersistAsset(mat);
                 return new SuccessResponse($"Set property {property} on {mat.name}");
             }
             else
@@ -185,7 +185,7 @@ namespace MCPForUnity.Editor.Tools
 
             if (foundProp)
             {
-                EditorUtility.SetDirty(mat);
+                EditorPersistence.PersistAsset(mat);
                 return new SuccessResponse($"Set color on {property}");
             }
             else
@@ -239,7 +239,7 @@ namespace MCPForUnity.Editor.Tools
             sharedMats[slot] = mat;
             renderer.sharedMaterials = sharedMats;
 
-            EditorUtility.SetDirty(renderer);
+            EditorPersistence.PersistComponent(renderer);
             return new SuccessResponse($"Assigned material {mat.name} to {go.name} slot {slot}");
         }
 
@@ -325,7 +325,7 @@ namespace MCPForUnity.Editor.Tools
                 }
 
                 renderer.SetPropertyBlock(block, slot);
-                EditorUtility.SetDirty(renderer);
+                EditorPersistence.PersistComponent(renderer);
                 return new SuccessResponse($"Set renderer color (PropertyBlock) on slot {slot}");
             }
             else if (mode == "shared")
@@ -339,7 +339,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     Undo.RecordObject(mat, "Set Material Color");
                     SetColorProperties(mat, color);
-                    EditorUtility.SetDirty(mat);
+                    EditorPersistence.PersistAsset(mat);
                     return new SuccessResponse("Set shared material color");
                 }
                 return new ErrorResponse("Invalid slot");
@@ -460,7 +460,8 @@ namespace MCPForUnity.Editor.Tools
             }
             sharedMats[slot] = existing;
             renderer.sharedMaterials = sharedMats;
-            EditorUtility.SetDirty(renderer);
+            // The SaveAssets above persists the material; the assignment happens after it.
+            EditorPersistence.PersistComponent(renderer);
 
             return new SuccessResponse($"Created unique material at {matPath} and assigned to {go.name}",
                 new { materialPath = matPath });
