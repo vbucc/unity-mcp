@@ -19,7 +19,7 @@ export default function HomeArchitecture() {
         <div
           className={styles.diagram}
           role="img"
-          aria-label="MCP for Unity architecture diagram: MCP client connects to the Python server over stdio or HTTP, which talks to the Unity Editor plugin over WebSocket."
+          aria-label="MCP for Unity architecture diagram: MCP client connects to the Python server over HTTP, which talks to the Unity Editor plugin over WebSocket."
         >
           <Stage
             kicker="LAYER 01"
@@ -28,7 +28,7 @@ export default function HomeArchitecture() {
             body="Speaks the Model Context Protocol. Discovers tools and resources, sends prompts, renders results."
             tone="filled"
           />
-          <Edge label="stdio  ·  HTTP /mcp" />
+          <Edge label="HTTP /mcp" />
           <Stage
             kicker="LAYER 02"
             title="Python Server"

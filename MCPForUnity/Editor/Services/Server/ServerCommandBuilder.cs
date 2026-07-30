@@ -23,13 +23,6 @@ namespace MCPForUnity.Editor.Services.Server
             displayCommand = null;
             error = null;
 
-            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
-            if (!useHttpTransport)
-            {
-                error = $"HTTP transport is disabled. Enable it in the {ProductInfo.ProductName} window first.";
-                return false;
-            }
-
             string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
             if (!HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(httpUrl, out string localUrlError))
             {

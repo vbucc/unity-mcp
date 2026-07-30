@@ -29,7 +29,7 @@ def mock_unity(monkeypatch):
     """Patch Unity transport layer and return captured call dict."""
     captured: dict[str, object] = {}
 
-    async def fake_send(send_fn, unity_instance, tool_name, params):
+    async def fake_send(unity_instance, tool_name, params):
         captured["unity_instance"] = unity_instance
         captured["tool_name"] = tool_name
         captured["params"] = params
@@ -328,7 +328,7 @@ def test_action_case_insensitive(mock_unity):
 # ---------------------------------------------------------------------------
 
 def test_non_dict_result_wrapped(monkeypatch):
-    async def fake_send(send_fn, unity_instance, tool_name, params):
+    async def fake_send(unity_instance, tool_name, params):
         return "unexpected string result"
 
     monkeypatch.setattr(

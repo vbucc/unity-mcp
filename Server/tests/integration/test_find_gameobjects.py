@@ -14,7 +14,7 @@ async def test_find_gameobjects_basic_search(monkeypatch):
     """Test basic search returns instance IDs."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["cmd"] = cmd
         captured["params"] = params
         return {
@@ -30,7 +30,7 @@ async def test_find_gameobjects_basic_search(monkeypatch):
 
     monkeypatch.setattr(
         find_go_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -51,7 +51,7 @@ async def test_find_gameobjects_by_component(monkeypatch):
     """Test search by component type."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -66,7 +66,7 @@ async def test_find_gameobjects_by_component(monkeypatch):
 
     monkeypatch.setattr(
         find_go_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -86,7 +86,7 @@ async def test_find_gameobjects_pagination_params(monkeypatch):
     """Test pagination parameters are passed correctly."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -102,7 +102,7 @@ async def test_find_gameobjects_pagination_params(monkeypatch):
 
     monkeypatch.setattr(
         find_go_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -125,13 +125,13 @@ async def test_find_gameobjects_boolean_coercion(monkeypatch):
     """Test boolean string coercion for include_inactive."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"instanceIDs": []}}
 
     monkeypatch.setattr(
         find_go_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -152,13 +152,13 @@ async def test_find_gameobjects_by_layer(monkeypatch):
     """Test search by layer."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"instanceIDs": [999]}}
 
     monkeypatch.setattr(
         find_go_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -178,13 +178,13 @@ async def test_find_gameobjects_by_path(monkeypatch):
     """Test search by hierarchy path."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"instanceIDs": [777]}}
 
     monkeypatch.setattr(
         find_go_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 

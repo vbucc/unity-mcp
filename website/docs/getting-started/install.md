@@ -50,7 +50,7 @@ After import, MCP for Unity opens a **setup wizard** automatically.
 2. Click **Done**. Once dependencies are green, a list of MCP clients detected on your machine appears.
 3. Pick the clients you want to configure and click **Configure Selected**.
 
-You can return to this UI anytime via **Window → MCP for Unity** to start/stop the server, switch transport (HTTP vs stdio), or reconfigure clients. The status panel reads `Connected` when everything is wired up.
+You can return to this UI anytime via **Window → MCP for Unity** to start/stop the server, switch transport scope (HTTP Local vs HTTP Remote), or reconfigure clients. The status panel reads `Connected` when everything is wired up.
 
 ### First prompt
 
@@ -64,7 +64,6 @@ Try one of these in your MCP client:
 
 ## Per-client notes
 
-- **Claude Desktop** only supports stdio. MCP for Unity will silently configure it that way even if you have HTTP selected elsewhere.
 - **Cursor, Antigravity, OpenClaw** still require enabling an MCP toggle or plugin in their own settings after auto-configuration.
 - **OpenClaw** also needs the `openclaw-mcp-bridge` plugin enabled and follows the currently selected MCP for Unity transport.
 - **Claude Code, VS Code, Windsurf, Cline, and the CLI clients** auto-connect after configuration.
@@ -95,34 +94,6 @@ If auto-configuration doesn't work for your client, add this to your client's MC
     "unityMCP": {
       "type": "http",
       "url": "http://localhost:8080/mcp"
-    }
-  }
-}
-```
-
-### Stdio (Claude Desktop, or any client without HTTP)
-
-**macOS / Linux:**
-
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "command": "uvx",
-      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
-    }
-  }
-}
-```
-
-**Windows:**
-
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "command": "C:/Users/YOUR_USERNAME/AppData/Local/Microsoft/WinGet/Links/uvx.exe",
-      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
     }
   }
 }

@@ -29,7 +29,6 @@ Example: `MyGame@a1b2c3d4`.
 You can also reference an instance by:
 
 - **Hash prefix** (e.g. `a1b` if it's unambiguous)
-- **Port number** — stdio transport only
 
 ## Discovering instances
 
@@ -37,7 +36,7 @@ Read the resource:
 
 > `mcpforunity://instances`
 
-It returns the list of currently connected Editors with their `Name@hash`, project path, transport, and port. Most MCP clients expose this as the `unity_instances` resource.
+It returns the list of currently connected Editors with their `Name@hash`, Unity version, and connection time. Most MCP clients expose this as the `unity_instances` resource.
 
 ## Setting the active instance for the session
 
@@ -51,7 +50,6 @@ You can also use:
 
 ```
 set_active_instance(instance="a1b")         # hash prefix
-set_active_instance(instance="6401")        # port number (stdio only)
 ```
 
 ## Routing a single call without changing the session default
@@ -64,17 +62,16 @@ manage_scene(action="get_hierarchy", unity_instance="MyGame@a1b2c3d4")
 
 This is useful for comparing two projects in the same prompt — e.g., "Read the same script from both projects and tell me what differs."
 
-The server accepts the same value formats as `set_active_instance`: `Name@hash`, hash prefix, or (stdio) port number.
+The server accepts the same value formats as `set_active_instance`: `Name@hash` or a hash prefix.
 
 ## What happens with no active instance
 
 - **One Unity Editor connected** → it's used automatically.
 - **Multiple Editors connected and no active set** → the server errors with the available instance list. Call `set_active_instance` and retry.
 
-## HTTP vs stdio differences
+## How session isolation works
 
-- **HTTP**: instance state is keyed per-session by `client_id`, so two MCP clients can target different Editors at the same time on the same Python server.
-- **Stdio**: port-number shorthand works because there's a separate Python process per client. HTTP shares one process and uses `Name@hash` exclusively.
+Instance state is keyed per MCP session (`Mcp-Session-Id`), so two MCP clients can target different Editors at the same time on the same Python server.
 
 ## Related reference
 

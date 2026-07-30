@@ -23,15 +23,15 @@ async def test_manage_gameobject_uses_session_state(monkeypatch):
     captured = {}
 
     # Monkeypatch transport to capture the resolved instance_id
-    async def fake_send(command_type, params, **kwargs):
+    async def fake_send(unity_instance, command_type, params, **kwargs):
         captured["command_type"] = command_type
         captured["params"] = params
-        captured["instance_id"] = kwargs.get("instance_id")
+        captured["instance_id"] = unity_instance
         return {"success": True, "data": {}}
 
     import services.tools.manage_gameobject as mg
     monkeypatch.setattr(
-        "services.tools.manage_gameobject.async_send_command_with_retry",
+        "services.tools.manage_gameobject.send_with_unity_instance",
         fake_send,
     )
 
@@ -65,13 +65,13 @@ async def test_manage_gameobject_without_active_instance(monkeypatch):
 
     captured = {}
 
-    async def fake_send(command_type, params, **kwargs):
+    async def fake_send(_unity_instance, command_type, params, **kwargs):
         captured["instance_id"] = kwargs.get("instance_id")
         return {"success": True, "data": {}}
 
     import services.tools.manage_gameobject as mg
     monkeypatch.setattr(
-        "services.tools.manage_gameobject.async_send_command_with_retry",
+        "services.tools.manage_gameobject.send_with_unity_instance",
         fake_send,
     )
 

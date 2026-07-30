@@ -7,7 +7,6 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.utils import coerce_bool, normalize_vector3
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
 
 
@@ -225,7 +224,7 @@ async def manage_prefabs(
 
         # Send command to Unity
         response = await send_with_unity_instance(
-            async_send_command_with_retry, unity_instance, "manage_prefabs", params
+            unity_instance, "manage_prefabs", params
         )
 
         # Return Unity response directly; ensure success field exists

@@ -1,6 +1,6 @@
 import pytest
 
-from .test_helpers import DummyContext, setup_script_tools
+from .test_helpers import DummyContext, setup_script_tools, patch_script_send
 
 
 @pytest.mark.asyncio
@@ -8,19 +8,12 @@ async def test_split_uri_unity_path(monkeypatch):
     test_tools = setup_script_tools()
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):  # capture params and return success
+    async def fake_send(_unity_instance, cmd, params, **kwargs):  # capture params and return success
         captured['cmd'] = cmd
         captured['params'] = params
         return {"success": True, "message": "ok"}
 
-    # Patch the send_command_with_retry function at the module level where it's imported
-    import transport.legacy.unity_connection
-    monkeypatch.setattr(
-        transport.legacy.unity_connection,
-        "async_send_command_with_retry",
-        fake_send,
-    )
-    # No need to patch tools.manage_script; it now calls unity_connection.send_command_with_retry
+    patch_script_send(monkeypatch, fake_send)
 
     fn = test_tools['apply_text_edits']
     uri = "mcpforunity://path/Assets/Scripts/MyScript.cs"
@@ -48,19 +41,12 @@ async def test_split_uri_file_urls(monkeypatch, uri, expected_name, expected_pat
     test_tools = setup_script_tools()
     captured = {}
 
-    async def fake_send(_cmd, params, **kwargs):
+    async def fake_send(_unity_instance, _cmd, params, **kwargs):
         captured['cmd'] = _cmd
         captured['params'] = params
         return {"success": True, "message": "ok"}
 
-    # Patch the send_command_with_retry function at the module level where it's imported
-    import transport.legacy.unity_connection
-    monkeypatch.setattr(
-        transport.legacy.unity_connection,
-        "async_send_command_with_retry",
-        fake_send,
-    )
-    # No need to patch tools.manage_script; it now calls unity_connection.send_command_with_retry
+    patch_script_send(monkeypatch, fake_send)
 
     fn = test_tools['apply_text_edits']
     await fn(DummyContext(), uri=uri, edits=[], precondition_sha256=None)
@@ -74,18 +60,11 @@ async def test_split_uri_plain_path(monkeypatch):
     test_tools = setup_script_tools()
     captured = {}
 
-    async def fake_send(_cmd, params, **kwargs):
+    async def fake_send(_unity_instance, _cmd, params, **kwargs):
         captured['params'] = params
         return {"success": True, "message": "ok"}
 
-    # Patch the send_command_with_retry function at the module level where it's imported
-    import transport.legacy.unity_connection
-    monkeypatch.setattr(
-        transport.legacy.unity_connection,
-        "async_send_command_with_retry",
-        fake_send,
-    )
-    # No need to patch tools.manage_script; it now calls unity_connection.send_command_with_retry
+    patch_script_send(monkeypatch, fake_send)
 
     fn = test_tools['apply_text_edits']
     await fn(

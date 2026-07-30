@@ -9,13 +9,13 @@ async def test_manage_gameobject_boolean_coercion(monkeypatch):
     """Test that string boolean values are properly coerced for valid actions."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {}}
 
     monkeypatch.setattr(
         manage_go_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -39,13 +39,13 @@ async def test_manage_gameobject_create_with_tag(monkeypatch):
     """Test that create action properly passes tag parameter."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {}}
 
     monkeypatch.setattr(
         manage_go_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 

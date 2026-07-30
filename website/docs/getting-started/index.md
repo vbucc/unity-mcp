@@ -18,7 +18,7 @@ MCP for Unity bridges AI assistants — Claude, Codex, VS Code, local LLMs, and 
 - **25+ read-only resources** for state introspection — `editor_state`, `gameobject_components`, `project_info`, `unity_instances`, etc.
 - **Auto-configuration** for popular MCP clients — Claude Desktop, Claude Code, Cursor, VS Code, Windsurf, Cline, Codex, Qwen, Gemini CLI, Copilot CLI, OpenClaw.
 - **Multi-instance support** — drive several Unity Editors from a single session via `set_active_instance`.
-- **Two transports** — HTTP (multi-agent, default) and stdio (single-agent legacy).
+- **HTTP transport** — multi-agent ready, with local and remote-hosted scopes.
 
 ## When you'd use it
 

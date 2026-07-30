@@ -13,7 +13,7 @@ from services.tools.execute_code import execute_code
 def mock_unity(monkeypatch):
     captured: dict[str, object] = {}
 
-    async def fake_send(send_fn, unity_instance, tool_name, params):
+    async def fake_send(unity_instance, tool_name, params):
         captured["tool_name"] = tool_name
         captured["params"] = params
         return {"success": True, "message": "Code executed successfully.", "data": {"result": 42}}
@@ -31,7 +31,7 @@ def mock_unity(monkeypatch):
 
 @pytest.fixture
 def mock_unity_error(monkeypatch):
-    async def fake_send(send_fn, unity_instance, tool_name, params):
+    async def fake_send(unity_instance, tool_name, params):
         return {"success": False, "error": "Compilation failed"}
 
     monkeypatch.setattr(
@@ -150,7 +150,7 @@ def test_error_response_normalized(mock_unity_error):
 
 
 def test_non_dict_response_handled(monkeypatch):
-    async def fake_send(send_fn, unity_instance, tool_name, params):
+    async def fake_send(unity_instance, tool_name, params):
         return "unexpected"
 
     monkeypatch.setattr(

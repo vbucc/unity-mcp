@@ -26,7 +26,7 @@ async def test_editor_state_v2_is_registered_and_has_contract_fields(monkeypatch
         "This is required so clients can poll readiness/staleness and avoid tool loops."
     )
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         # Minimal stub payload for v2 resource tests. The server layer should enrich with staleness/advice.
         assert command_type == "get_editor_state"
         return {
@@ -88,7 +88,7 @@ async def test_editor_state_play_mode_never_gates_tools(monkeypatch, play_mode, 
     # Fresh timestamp so the snapshot is not flagged stale (which would itself gate tools).
     observed = int(time.time() * 1000)
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         assert command_type == "get_editor_state"
         return {
             "success": True,

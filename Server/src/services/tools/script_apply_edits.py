@@ -11,7 +11,6 @@ from services.tools import get_unity_instance_from_context
 from services.tools.refresh_unity import send_mutation, verify_edit_by_sha
 from services.tools.utils import parse_json_payload
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 def _iter_csharp_tokens(text: str):
@@ -954,9 +953,9 @@ async def script_apply_edits(
         # Get pre-edit SHA for disconnect verification
         pre_sha = None
         try:
-            sha_resp = await async_send_command_with_retry(
-                "manage_script", {"action": "get_sha", "name": name, "path": path},
-                instance_id=unity_instance,
+            sha_resp = await send_with_unity_instance(
+                unity_instance, "manage_script",
+                {"action": "get_sha", "name": name, "path": path},
             )
             if isinstance(sha_resp, dict) and sha_resp.get("success"):
                 pre_sha = (sha_resp.get("data") or {}).get("sha256")
@@ -984,13 +983,13 @@ async def script_apply_edits(
         return _with_norm(resp_struct if isinstance(resp_struct, dict) else {"success": False, "message": str(resp_struct)}, normalized_for_echo, routing="structured")
 
     # 1) read from Unity
-    read_resp = await async_send_command_with_retry("manage_script", {
+    read_resp = await send_with_unity_instance(unity_instance, "manage_script", {
         "action": "read",
         "name": name,
         "path": path,
         "namespace": namespace,
         "scriptType": script_type,
-    }, instance_id=unity_instance)
+    })
     if not isinstance(read_resp, dict) or not read_resp.get("success"):
         return read_resp if isinstance(read_resp, dict) else {"success": False, "message": str(read_resp)}
 

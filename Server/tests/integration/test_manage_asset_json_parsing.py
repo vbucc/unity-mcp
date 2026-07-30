@@ -18,10 +18,10 @@ class TestManageAssetJsonParsing:
         ctx = DummyContext()
 
         # Patch Unity transport
-        async def fake_async(cmd, params, **kwargs):
+        async def fake_async(_unity_instance, cmd, params, **kwargs):
             return {"success": True, "message": "Asset created successfully", "data": {"path": "Assets/Test.mat"}}
         monkeypatch.setattr(
-            "services.tools.manage_asset.async_send_command_with_retry", fake_async)
+            "services.tools.manage_asset.send_with_unity_instance", fake_async)
 
         # Test with JSON string properties
         result = await manage_asset(
@@ -41,10 +41,10 @@ class TestManageAssetJsonParsing:
         """Test handling of invalid JSON string properties."""
         ctx = DummyContext()
 
-        async def fake_async(cmd, params, **kwargs):
+        async def fake_async(_unity_instance, cmd, params, **kwargs):
             return {"success": True, "message": "Asset created successfully"}
         monkeypatch.setattr(
-            "services.tools.manage_asset.async_send_command_with_retry", fake_async)
+            "services.tools.manage_asset.send_with_unity_instance", fake_async)
 
         # Test with invalid JSON string
         result = await manage_asset(
@@ -64,10 +64,10 @@ class TestManageAssetJsonParsing:
         """Test that dict properties are passed through unchanged."""
         ctx = DummyContext()
 
-        async def fake_async(cmd, params, **kwargs):
+        async def fake_async(_unity_instance, cmd, params, **kwargs):
             return {"success": True, "message": "Asset created successfully"}
         monkeypatch.setattr(
-            "services.tools.manage_asset.async_send_command_with_retry", fake_async)
+            "services.tools.manage_asset.send_with_unity_instance", fake_async)
 
         # Test with dict properties
         properties_dict = {
@@ -90,10 +90,10 @@ class TestManageAssetJsonParsing:
         """Test that None properties are handled correctly."""
         ctx = DummyContext()
 
-        async def fake_async(cmd, params, **kwargs):
+        async def fake_async(_unity_instance, cmd, params, **kwargs):
             return {"success": True, "message": "Asset created successfully"}
         monkeypatch.setattr(
-            "services.tools.manage_asset.async_send_command_with_retry", fake_async)
+            "services.tools.manage_asset.send_with_unity_instance", fake_async)
 
         # Test with None properties
         result = await manage_asset(
@@ -119,10 +119,10 @@ class TestManageGameObjectJsonParsing:
 
         ctx = DummyContext()
 
-        async def fake_send(_cmd, params, **_kwargs):
+        async def fake_send(_unity_instance, _cmd, params, **_kwargs):
             return {"success": True, "message": "GameObject created successfully"}
         monkeypatch.setattr(
-            "services.tools.manage_gameobject.async_send_command_with_retry",
+            "services.tools.manage_gameobject.send_with_unity_instance",
             fake_send,
         )
 
@@ -145,12 +145,12 @@ class TestManageGameObjectJsonParsing:
         ctx = DummyContext()
         
         captured_params = {}
-        async def fake_send(_cmd, params, **_kwargs):
+        async def fake_send(_unity_instance, _cmd, params, **_kwargs):
             captured_params.update(params)
             return {"success": True, "message": "GameObject created successfully"}
             
         monkeypatch.setattr(
-            "services.tools.manage_gameobject.async_send_command_with_retry",
+            "services.tools.manage_gameobject.send_with_unity_instance",
             fake_send,
         )
         

@@ -10,6 +10,7 @@ from core.telemetry_decorator import telemetry_tool
 from core.logging_decorator import log_execution
 from utils.module_discovery import discover_modules
 from services.registry import get_registered_tools, TOOL_GROUPS, DEFAULT_ENABLED_GROUPS
+from transport.unity_transport import send_with_unity_instance
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -68,30 +69,20 @@ def register_all_tools(mcp: FastMCP, *, project_scoped_tools: bool = True):
 
     logger.info(f"Registered {len(tools)} MCP tools")
 
-    # In HTTP mode, disable non-default groups at the server level so new
-    # sessions start lean.  Unity will re-enable groups via register_tools
+    # Disable non-default groups at the server level so new sessions start lean.
+    # Unity will re-enable groups via register_tools
     # (PluginHub._sync_server_tool_visibility) once it connects.
-    # In stdio mode we skip this: the legacy TCP bridge has no register_tools
-    # message, so disabled groups would stay invisible for the entire session.
     # Tools with group=None (no tag) are unaffected and always visible.
-    from core.config import config as server_config
-
-    if (server_config.transport_mode or "stdio").lower() == "http":
-        groups_to_disable = set(TOOL_GROUPS.keys()) - DEFAULT_ENABLED_GROUPS
-        for group_name in sorted(groups_to_disable):
-            tag = f"group:{group_name}"
-            mcp.disable(tags={tag}, components={"tool"})
-            logger.debug(f"Disabled tool group at startup: {group_name}")
-        logger.info(
-            f"Default tool groups: {', '.join(sorted(DEFAULT_ENABLED_GROUPS))}. "
-            f"Disabled: {', '.join(sorted(groups_to_disable))}. "
-            "Use manage_tools to activate more."
-        )
-    else:
-        logger.info(
-            "Stdio transport: all tool groups enabled at startup. "
-            "Will sync with Unity's tool states after connecting."
-        )
+    groups_to_disable = set(TOOL_GROUPS.keys()) - DEFAULT_ENABLED_GROUPS
+    for group_name in sorted(groups_to_disable):
+        tag = f"group:{group_name}"
+        mcp.disable(tags={tag}, components={"tool"})
+        logger.debug(f"Disabled tool group at startup: {group_name}")
+    logger.info(
+        f"Default tool groups: {', '.join(sorted(DEFAULT_ENABLED_GROUPS))}. "
+        f"Disabled: {', '.join(sorted(groups_to_disable))}. "
+        "Use manage_tools to activate more."
+    )
 
 
 async def sync_tool_visibility_from_unity(
@@ -100,9 +91,9 @@ async def sync_tool_visibility_from_unity(
 ) -> dict:
     """Query Unity for tool enabled/disabled states and sync server-level visibility.
 
-    This bridges the gap in stdio mode where Unity can't push ``register_tools``
-    messages.  The Python server queries Unity's ``get_tool_states`` resource via
-    the legacy TCP connection and feeds the result into
+    Unity pushes ``register_tools`` over the WebSocket hub when it connects, so
+    this is the on-demand path behind ``manage_tools(action="sync")``: it pulls
+    ``get_tool_states`` from Unity and feeds the result into
     ``PluginHub._sync_server_tool_visibility``.
 
     Args:
@@ -112,12 +103,11 @@ async def sync_tool_visibility_from_unity(
     Returns:
         dict with sync results (enabled/disabled groups, tool count).
     """
-    from transport.legacy.unity_connection import async_send_command_with_retry
     from transport.plugin_hub import PluginHub
 
     try:
-        response = await async_send_command_with_retry(
-            "get_tool_states", {}, instance_id=instance_id,
+        response = await send_with_unity_instance(
+            instance_id, "get_tool_states", {},
         )
 
         # Detect unsupported command (Unity package too old)
@@ -214,7 +204,7 @@ async def sync_tool_visibility_from_unity(
                     service.register_global_tools(custom_tool_models)
                     custom_tool_count = len(custom_tool_models)
                     logger.info(
-                        "Registered %d custom tool(s) from Unity via stdio sync",
+                        "Registered %d custom tool(s) from Unity via tool sync",
                         custom_tool_count,
                     )
                 except RuntimeError as exc:
@@ -232,7 +222,7 @@ async def sync_tool_visibility_from_unity(
             logger.debug(
                 "Unity response does not include extended tool metadata "
                 "(is_built_in); skipping custom tool registration. "
-                "Update MCPForUnity to enable custom tool sync in stdio mode."
+                "Update MCPForUnity to enable custom tool sync."
             )
 
         if notify:

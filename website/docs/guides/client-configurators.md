@@ -112,10 +112,6 @@ All of these follow the same pattern:
 
 `JsonFileMcpConfigurator` relies on the fields on `McpClient`:
 
-- **HTTP vs stdio**
-  - `SupportsHttpTransport` + `EditorPrefs.UseHttpTransport` decide whether to configure
-    - `url` / `serverUrl` (HTTP), or
-    - `command` + `args` (stdio with `uvx`).
 - **URL property name**
   - `HttpUrlProperty` (default `"url"`) selects which JSON property to use for HTTP urls.
   - Example: Windsurf and the two Antigravity clients use `"serverUrl"`.
@@ -156,22 +152,14 @@ Some clients cannot be handled by the generic JSON configurator alone.
   - Only needs a `McpClient` with a `name`.
   - Overrides `GetInstallationSteps` with CLI-specific instructions.
 
-### Claude Desktop (JSON with restrictions)
-
-- Uses **`JsonFileMcpConfigurator`**, but only supports **stdio transport**.
-- `ClaudeDesktopConfigurator`:
-  - Sets `SupportsHttpTransport = false` in `McpClient`.
-  - Declares `SupportedTransports => StdioOnly`. `ClientConfigurationService` reads `SupportedTransports` and, via `ConfigureWithTransportCoercion` / `CoerceTransportFor`, temporarily coerces the transport pref to stdio before calling `Configure()` — so users with HTTP toggled globally still get a working stdio entry written without a thrown error. The coercion applies to any configurator whose `SupportedTransports` excludes the user's current transport; Claude Desktop is just the only one declaring stdio-only today.
-
 ### OpenClaw (plugin-based)
 
 - Uses a custom configurator (`OpenClawConfigurator`) because OpenClaw MCP is plugin-driven.
 - Config file path is `~/.openclaw/openclaw.json`.
 - Unity MCP is configured through `plugins.entries.openclaw-mcp-bridge.config.servers.unityMCP`.
 - When Unity MCP is set to HTTP, the bridge expects the MCP JSON-RPC endpoint URL (`http://127.0.0.1:<port>/mcp`), not just the HTTP base URL.
-- When Unity MCP is set to stdio, the configurator writes a `uvx ... mcp-for-unity --transport stdio` subprocess entry.
 - The bridge exposes a single proxy tool such as `unityMCP__call`, which then forwards to Unity MCP tool names.
-- OpenClaw support follows the currently selected MCP for Unity transport (via `openclaw-mcp-bridge`).
+- OpenClaw support follows the currently selected MCP for Unity transport scope (via `openclaw-mcp-bridge`).
 
 ---
 
@@ -242,7 +230,7 @@ The base `JsonFileMcpConfigurator`:
 
 - Detects missing or mismatched config.
 - Optionally rewrites config to match Unity MCP.
-- Builds a JSON snippet with **correct HTTP vs stdio settings**, using `ConfigJsonBuilder`.
+- Builds a JSON snippet with the correct HTTP settings, using `ConfigJsonBuilder`.
 
 Only override these methods if your client has constraints that cannot be expressed via `McpClient` flags.
 

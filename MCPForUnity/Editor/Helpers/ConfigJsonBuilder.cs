@@ -43,80 +43,53 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Centralized builder that applies all caveats consistently.
-        /// - Sets command/args with uvx and package version
         /// - Ensures env exists
-        /// - Adds transport configuration (HTTP or stdio)
+        /// - Adds HTTP transport configuration
         /// - Adds disabled:false for Windsurf/Kiro only when missing
         /// </summary>
         private static void PopulateUnityNode(JObject unity, string uvPath, McpClient client, bool isVSCode)
         {
-            // Get transport preference (default to HTTP)
-            bool prefValue = EditorConfigurationCache.Instance.UseHttpTransport;
-            bool clientSupportsHttp = client?.SupportsHttpTransport != false;
-            bool useHttpTransport = clientSupportsHttp && prefValue;
             string httpProperty = string.IsNullOrEmpty(client?.HttpUrlProperty) ? "url" : client.HttpUrlProperty;
             var urlPropsToRemove = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "url", "serverUrl" };
             urlPropsToRemove.Remove(httpProperty);
 
-            if (useHttpTransport)
+            // HTTP mode: Use URL, no command
+            string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+            unity[httpProperty] = httpUrl;
+
+            foreach (var prop in urlPropsToRemove)
             {
-                // HTTP mode: Use URL, no command
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
-                unity[httpProperty] = httpUrl;
+                if (unity[prop] != null) unity.Remove(prop);
+            }
 
-                foreach (var prop in urlPropsToRemove)
+            // Remove command/args if they exist from previous config
+            if (unity["command"] != null) unity.Remove("command");
+            if (unity["args"] != null) unity.Remove("args");
+
+            // Only include API key header for remote-hosted mode
+            if (HttpEndpointUtility.IsRemoteScope())
+            {
+                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                if (!string.IsNullOrEmpty(apiKey))
                 {
-                    if (unity[prop] != null) unity.Remove(prop);
-                }
-
-                // Remove command/args if they exist from previous config
-                if (unity["command"] != null) unity.Remove("command");
-                if (unity["args"] != null) unity.Remove("args");
-
-                // Only include API key header for remote-hosted mode
-                if (HttpEndpointUtility.IsRemoteScope())
-                {
-                    string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
-                    if (!string.IsNullOrEmpty(apiKey))
-                    {
-                        var headers = new JObject { [AuthConstants.ApiKeyHeader] = apiKey };
-                        unity["headers"] = headers;
-                    }
-                    else
-                    {
-                        if (unity["headers"] != null) unity.Remove("headers");
-                    }
+                    var headers = new JObject { [AuthConstants.ApiKeyHeader] = apiKey };
+                    unity["headers"] = headers;
                 }
                 else
                 {
-                    // Local HTTP doesn't use API keys; remove any stale headers
                     if (unity["headers"] != null) unity.Remove("headers");
                 }
-
-                // Per-client override of the HTTP "type" value: Cline/Roo expect "streamableHttp"
-                // and Kilo expects "remote"; both fall back to stdio when they see the generic
-                // "http". Defaults to "http" (standard MCP protocol field) when unset, so clients
-                // don't default to SSE on seeing a URL without a type.
-                unity["type"] = string.IsNullOrEmpty(client?.HttpTypeValue) ? "http" : client.HttpTypeValue;
             }
             else
             {
-                // Stdio mode: Use uvx command
-                var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
-
-                var toolArgs = BuildUvxArgs(fromUrl, packageName);
-
-                unity["command"] = uvxPath;
-                unity["args"] = JArray.FromObject(toolArgs.ToArray());
-
-                // Remove url/serverUrl if they exist from previous config
-                if (unity["url"] != null) unity.Remove("url");
-                if (unity["serverUrl"] != null) unity.Remove("serverUrl");
-
-                // Include type for all clients — standard MCP protocol field. A few clients use a
-                // different token for local transport (e.g. Kilo uses "local").
-                unity["type"] = string.IsNullOrEmpty(client?.StdioTypeValue) ? "stdio" : client.StdioTypeValue;
+                // Local HTTP doesn't use API keys; remove any stale headers
+                if (unity["headers"] != null) unity.Remove("headers");
             }
+
+            // Per-client override of the HTTP "type" value: Cline/Roo expect "streamableHttp"
+            // and Kilo expects "remote". Defaults to "http" (standard MCP protocol field)
+            // when unset, so clients don't default to SSE on seeing a URL without a type.
+            unity["type"] = string.IsNullOrEmpty(client?.HttpTypeValue) ? "http" : client.HttpTypeValue;
 
             bool requiresEnv = client?.EnsureEnvObject == true;
             bool stripEnv = client?.StripEnvWhenNotRequired == true;
@@ -159,29 +132,6 @@ namespace MCPForUnity.Editor.Helpers
             return created;
         }
 
-        private static IList<string> BuildUvxArgs(string fromUrl, string packageName)
-        {
-            // Dev mode: force a fresh install/resolution (avoids stale cached builds while iterating).
-            // `--no-cache` avoids reading from cache; `--refresh` ensures metadata is revalidated.
-            // Note: --reinstall is not supported by uvx and will cause a warning.
-            // Keep ordering consistent with other uvx builders: dev flags first, then --from <url>, then package name.
-            var args = new List<string>();
-
-            foreach (var flag in AssetPathUtility.GetUvxDevFlagsList())
-                args.Add(flag);
-
-            // Use centralized helper for beta server / prerelease args
-            foreach (var arg in AssetPathUtility.GetBetaServerFromArgsList())
-            {
-                args.Add(arg);
-            }
-            args.Add(packageName);
-
-            args.Add("--transport");
-            args.Add("stdio");
-
-            return args;
-        }
 
     }
 }

@@ -8,7 +8,8 @@ disabled every group (including ``core``) during that window, surfacing as
 transient ``Unknown tool: 'read_console'`` errors for every connected MCP
 session and bypassing the reload-retry path in ``send_command_for_instance``.
 
-The explicit-list path (stdio's ``sync_tool_visibility_from_unity``) is
+The explicit-list path (``sync_tool_visibility_from_unity``, behind the
+on-demand tool-sync action) is
 affirmative data from a live Unity and must keep its disable semantics even
 for an empty list — pinned here so the guard stays scoped to the registry
 branch.
@@ -112,7 +113,7 @@ async def test_nonempty_registry_union_rewrites_and_returns_true(hub_state):
 
 @pytest.mark.asyncio
 async def test_empty_explicit_list_still_disables_groups(hub_state):
-    """The stdio explicit-list path is affirmative Unity data: an empty list
+    """The explicit-list path is affirmative Unity data: an empty list
     must keep disabling groups (guard applies only to the registry branch)."""
     _registry, mcp = hub_state
 

@@ -12,13 +12,13 @@ description: "Set the active Unity instance for this client/session."
 
 ## Description
 
-Set the active Unity instance for this client/session. Accepts Name@hash, hash prefix, or port number (stdio only).
+Set the active Unity instance for this client/session. Accepts Name@hash or a hash prefix.
 
 ## Parameters
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `instance` | `str` | yes | Target instance (Name@hash, hash prefix, or port number in stdio mode) |
+| `instance` | `str` | yes | Target instance (Name@hash or hash prefix) |
 
 ## Returns
 

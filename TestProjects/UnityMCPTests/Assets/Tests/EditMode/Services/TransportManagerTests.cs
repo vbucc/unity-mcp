@@ -37,10 +37,10 @@ namespace MCPForUnityTests.Editor.Services
         {
             var client = new PendingTransportClient();
             var manager = new TransportManager();
-            manager.Configure(() => client, () => client);
+            manager.Configure(() => client);
 
-            Task<bool> first = manager.StartAsync(TransportMode.Http);
-            Task<bool> second = manager.StartAsync(TransportMode.Http);
+            Task<bool> first = manager.StartAsync();
+            Task<bool> second = manager.StartAsync();
 
             Assert.AreEqual(1, client.StartCalls, "concurrent starts must share one client attempt");
             Assert.AreSame(first, second, "the in-flight task is returned to concurrent callers");
@@ -53,12 +53,12 @@ namespace MCPForUnityTests.Editor.Services
         {
             var client = new FakeTransportClient();
             var manager = new TransportManager();
-            manager.Configure(() => client, () => client);
+            manager.Configure(() => client);
 
-            Task<bool> first = manager.StartAsync(TransportMode.Http);
+            Task<bool> first = manager.StartAsync();
             Assert.IsTrue(first.IsCompleted && first.Result, "fake start should complete synchronously");
 
-            Task<bool> second = manager.StartAsync(TransportMode.Http);
+            Task<bool> second = manager.StartAsync();
             Assert.AreEqual(2, client.StartCalls, "a completed start must not block later restarts");
             Assert.IsTrue(second.IsCompleted && second.Result);
         }

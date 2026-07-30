@@ -108,7 +108,6 @@ class TestInstanceListResourceIsolation:
     async def test_unity_instances_resource_filters_by_user(self, monkeypatch):
         """The unity_instances resource should pass user_id and return filtered results."""
         monkeypatch.setattr(config, "http_remote_hosted", True)
-        monkeypatch.setattr(config, "transport_mode", "http")
         await _setup_two_user_registry()
 
         from services.resources.unity_instances import unity_instances
@@ -131,7 +130,6 @@ class TestSetActiveInstanceIsolation:
     async def test_set_active_instance_only_sees_own_sessions(self, monkeypatch):
         """set_active_instance should only offer sessions belonging to the current user."""
         monkeypatch.setattr(config, "http_remote_hosted", True)
-        monkeypatch.setattr(config, "transport_mode", "http")
         await _setup_two_user_registry()
 
         from services.tools.set_active_instance import set_active_instance
@@ -155,7 +153,6 @@ class TestSetActiveInstanceIsolation:
     async def test_set_active_instance_rejects_other_users_instance(self, monkeypatch):
         """set_active_instance should not find another user's instance."""
         monkeypatch.setattr(config, "http_remote_hosted", True)
-        monkeypatch.setattr(config, "transport_mode", "http")
         await _setup_two_user_registry()
 
         from services.tools.set_active_instance import set_active_instance

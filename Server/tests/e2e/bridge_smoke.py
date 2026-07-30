@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """Deterministic, no-LLM end-to-end smoke test for the Python<->Unity bridge.
 
-This drives a LIVE Unity Editor (booted in CI via
-``McpForUnity.Editor.McpCiBoot.StartStdioForCi``) over the same wire path the
-real MCP server uses -- ``send_command_with_retry`` from
-``transport.legacy.unity_connection`` -- and asserts exact response fields. It
-replaces the LLM agent in ``claude-nl-suite.yml`` with a fixed script so the
-Python->C# request/response contract is gated on every PR without an API key.
+This drives a LIVE Unity Editor (booted by ``tools/local_harness.py`` via
+``MCPForUnity.Editor.McpCiBoot.StartHttpForCi``) through a running MCP server's
+``POST /api/command`` route -- the same PluginHub path the MCP tools use -- and
+asserts exact response fields. Being deterministic and free (no Anthropic API
+key), it can gate the Python->C# request/response contract on every change.
 
-Run locally against a running Unity Editor with the MCP bridge active::
+Run locally against a Unity Editor connected to a server on port 8123::
 
     cd Server
-    uv run python tests/e2e/bridge_smoke.py
+    uv run python tests/e2e/bridge_smoke.py --base-url http://127.0.0.1:8123
 
 Exit codes:
     0  all steps passed
@@ -25,16 +24,28 @@ import os
 import sys
 import time
 import uuid
+import json
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-# Make the server's ``src`` importable whether run from repo root or Server/.
-_SRC = Path(__file__).resolve().parents[2] / "src"
-if _SRC.is_dir() and str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+DEFAULT_BASE_URL = os.environ.get("UNITY_MCP_HTTP_URL", "http://127.0.0.1:8080")
 
-from transport.legacy.unity_connection import send_command_with_retry  # noqa: E402
+
+def send_command(base_url: str, command_type: str, params: dict[str, Any],
+                 instance_id: str | None = None, timeout: float = 300.0) -> Any:
+    """POST one command to the server's CLI route, which routes via PluginHub."""
+    payload: dict[str, Any] = {"type": command_type, "params": params or {}}
+    if instance_id:
+        payload["unity_instance"] = instance_id
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        f"{base_url}/api/command", data=body,
+        headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
 
 
 class BridgeUnavailable(Exception):
@@ -171,16 +182,13 @@ def build_steps() -> list[Step]:
     ]
 
 
-def run(instance_id: str | None, max_retries: int, retry_ms: int) -> list[StepResult]:
+def run(instance_id: str | None, base_url: str) -> list[StepResult]:
     results: list[StepResult] = []
     for step in build_steps():
         t0 = time.time()
         try:
-            resp = send_command_with_retry(
-                step.command, step.params,
-                instance_id=instance_id, max_retries=max_retries,
-                retry_ms=retry_ms, retry_on_reload=step.retry_on_reload,
-            )
+            resp = send_command(base_url, step.command, step.params,
+                                instance_id=instance_id)
         except Exception as exc:  # connection refused, timeout, etc.
             elapsed = time.time() - t0
             # A failure on the very first call usually means no bridge at all.
@@ -224,8 +232,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Deterministic Unity bridge E2E smoke test")
     ap.add_argument("--instance", default=os.environ.get("UNITY_MCP_DEFAULT_INSTANCE") or None,
                     help="Unity instance id (name, hash, name@hash). Default: env or auto-discover.")
-    ap.add_argument("--max-retries", type=int, default=8, help="Reload retries per command")
-    ap.add_argument("--retry-ms", type=int, default=250, help="Delay between reload retries (ms)")
+    ap.add_argument("--base-url", default=DEFAULT_BASE_URL,
+                    help="MCP server base URL (default: $UNITY_MCP_HTTP_URL or http://127.0.0.1:8080)")
+    ap.add_argument("--max-retries", type=int, default=8, help="Accepted for compatibility; the server owns reload retries")
+    ap.add_argument("--retry-ms", type=int, default=250, help="Accepted for compatibility; the server owns reload retries")
     ap.add_argument("--junit", default=os.environ.get("E2E_JUNIT_OUT"),
                     help="Optional path to write a JUnit XML report")
     args = ap.parse_args()
@@ -233,12 +243,13 @@ def main() -> int:
     instance = args.instance.strip() if isinstance(args.instance, str) else None
     print(f"== Unity bridge E2E smoke (run={_RUN}, instance={instance or 'auto'}) ==", flush=True)
 
+    base_url = (args.base_url or DEFAULT_BASE_URL).rstrip("/")
     try:
-        results = run(instance, args.max_retries, args.retry_ms)
+        results = run(instance, base_url)
     except BridgeUnavailable as exc:
-        print(f"::error::No Unity bridge reachable: {exc}", flush=True)
-        print("Is a Unity Editor running with the MCP bridge active? "
-              "(set UNITY_MCP_STATUS_DIR / UNITY_MCP_DEFAULT_INSTANCE for CI)", flush=True)
+        print(f"::error::No Unity bridge reachable at {base_url}: {exc}", flush=True)
+        print("Is an MCP server running with a Unity Editor connected to it? "
+              "(pass --base-url / --instance, or set UNITY_MCP_DEFAULT_INSTANCE)", flush=True)
         return 2
 
     if args.junit:

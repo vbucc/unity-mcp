@@ -61,12 +61,6 @@ MCP for Unity 将工具组织为**分组**（Core、VFX & Shaders、Animation、
 3. 服务器向所有已连接的客户端会话发送 `tools/list_changed` MCP 通知。
 4. 已连接的客户端（Claude Desktop、VS Code 等）自动接收更新后的工具列表。
 
-**Stdio 模式**：
-
-1. 开关状态在本地保存，但无法推送到服务器（没有 WebSocket 连接）。
-2. 服务器启动时所有分组均启用。更改开关后，让 AI 执行 `manage_tools`，`action` 设为 `'sync'`——这会从 Unity 拉取当前工具状态并同步服务器可见性。
-3. 也可以重启服务器来应用更改。
-
 ### `manage_tools` Meta-Tool
 
 服务器暴露一个内置的 `manage_tools` 工具（始终可见，不受分组限制），AI 可以直接调用：
@@ -76,15 +70,14 @@ MCP for Unity 将工具组织为**分组**（Core、VFX & Shaders、Animation、
 | `list_groups` | 列出所有工具分组及其工具和启用/禁用状态 |
 | `activate` | 按名称启用一个工具分组（例如 `group="vfx"`） |
 | `deactivate` | 按名称禁用一个工具分组 |
-| `sync` | 从 Unity 拉取当前工具状态并同步服务器可见性（stdio 模式必需） |
+| `sync` | 从 Unity 拉取当前工具状态并同步服务器可见性 |
 | `reset` | 恢复默认工具可见性 |
 
 ### 何时需要重新配置
 
 切换工具启用/禁用后，MCP 客户端需要获知这些变更：
 
-- **HTTP 模式**：变更通过 `tools/list_changed` 自动传播。大多数客户端会立即更新。如果客户端未更新，请在 Tools 标签页点击 **Reconfigure Clients**，或前往 Clients 标签页点击 Configure。
-- **Stdio 模式**：服务器进程需要被告知变更。可以让 AI 调用 `manage_tools(action='sync')`，或重启 MCP 会话。点击 **Reconfigure Clients** 以使用更新后的配置重新注册所有客户端。
+变更通过 `tools/list_changed` 自动传播。大多数客户端会立即更新。如果客户端未更新，请在 Tools 标签页点击 **Reconfigure Clients**，或前往 Clients 标签页点击 Configure。也可以让 AI 调用 `manage_tools(action='sync')` 从 Unity 重新拉取状态。
 
 ## 运行测试
 

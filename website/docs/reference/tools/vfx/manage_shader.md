@@ -1,7 +1,7 @@
 ---
 title: manage_shader
 sidebar_label: manage_shader
-description: "Manages shader scripts in Unity (create, read, update, delete)."
+description: "Manages shader scripts in Unity (create, read, update)."
 ---
 
 # `manage_shader`
@@ -12,13 +12,13 @@ description: "Manages shader scripts in Unity (create, read, update, delete)."
 
 ## Description
 
-Manages shader scripts in Unity (create, read, update, delete). Read-only action: read. Modifying actions: create, update, delete.
+Manages shader scripts in Unity (create, read, update). Read-only action: read. Modifying actions: create, update.
 
 ## Parameters
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `Literal['create', 'read', 'update', 'delete']` | yes | Perform CRUD operations on shader scripts. |
+| `action` | `Literal['create', 'read', 'update']` | yes | Perform CRUD operations on shader scripts. |
 | `name` | `str` | yes | Shader name (no .cs extension) |
 | `path` | `str` | yes | Asset path (default: "Assets/") |
 | `contents` | `str \| None` | — | Shader code for 'create'/'update' |

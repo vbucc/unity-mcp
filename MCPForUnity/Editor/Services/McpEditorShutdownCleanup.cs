@@ -27,7 +27,7 @@ namespace MCPForUnity.Editor.Services
 
         // A -batchmode/CI instance resolves the interactive editor's server via the global
         // pidfile+port handshake, so cleanup there would stop another user's server. Mirror the
-        // sibling guards (HttpAutoStartHandler, StdioBridgeHost): skip in batch unless opted in.
+        // sibling guard (HttpAutoStartHandler): skip in batch unless opted in.
         internal static bool ShouldRunCleanup() =>
             ShouldRunCleanup(Application.isBatchMode, Environment.GetEnvironmentVariable("UNITY_MCP_ALLOW_BATCH"));
 
@@ -38,20 +38,16 @@ namespace MCPForUnity.Editor.Services
         {
             if (!ShouldRunCleanup()) return;
 
-            // 1) Stop transports (best-effort, bounded wait).
+            // 1) Stop the transport (best-effort, bounded wait).
             try
             {
-                var transport = MCPServiceLocator.TransportManager;
-
-                Task stopHttp = transport.StopAsync(TransportMode.Http);
-                Task stopStdio = transport.StopAsync(TransportMode.Stdio);
-
-                try { Task.WaitAll(new[] { stopHttp, stopStdio }, 750); } catch { }
+                Task stop = MCPServiceLocator.TransportManager.StopAsync();
+                try { stop.Wait(750); } catch { }
             }
             catch (Exception ex)
             {
                 // Avoid hard failures on quit.
-                McpLog.Warn($"Shutdown cleanup: failed to stop transports: {ex.Message}");
+                McpLog.Warn($"Shutdown cleanup: failed to stop transport: {ex.Message}");
             }
         }
     }

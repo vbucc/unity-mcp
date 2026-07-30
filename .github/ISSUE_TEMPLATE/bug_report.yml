@@ -85,8 +85,8 @@ body:
     attributes:
       label: Transport
       options:
-        - HTTP (default)
-        - stdio
+        - HTTP Local
+        - HTTP Remote
         - Don't know
     validations:
       required: true

@@ -124,8 +124,8 @@ class TestUnityInstanceMiddlewareSessionManagement:
 
     The middleware now delegates persistence to FastMCP's session-scoped
     state store (``ctx.set_state`` / ``ctx.get_state``), which is keyed by
-    ``ctx.session_id`` (the MCP-Session-Id header on HTTP, a per-subprocess
-    UUID on stdio). The tests below validate that contract from the
+    ``ctx.session_id`` (the MCP-Session-Id header). The tests below
+    validate that contract from the
     middleware's perspective.
     """
 
@@ -257,9 +257,8 @@ class TestUnityInstanceMiddlewareInjection:
         async def mock_call_next(_ctx):
             return {"status": "ok"}
 
-        # Mock PluginHub as unavailable AND legacy connection pool to prevent fallback discovery
+        # Mock PluginHub as unavailable so no instance is discovered
         with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=False):
-            with patch("transport.legacy.unity_connection.get_unity_connection_pool", return_value=None):
                 await middleware.on_call_tool(middleware_ctx, mock_call_next)
 
         # set_state should not be called for unity_instance if no instance found
@@ -279,7 +278,6 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx.fastmcp_context = mock_context
 
         await mock_context.set_state("unity_instance", "Project@abc123")
-        monkeypatch.setattr(config, "transport_mode", "http")
 
         available_tools = [
             SimpleNamespace(name="manage_scene"),
@@ -333,7 +331,6 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx.fastmcp_context = mock_context
 
         await mock_context.set_state("unity_instance", "Project@abc123")
-        monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
             SimpleNamespace(name="manage_scene"),
@@ -386,7 +383,6 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx.fastmcp_context = mock_context
 
         await mock_context.set_state("unity_instance", "Project@abc123")
-        monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
             SimpleNamespace(name="manage_scene"),
@@ -442,7 +438,6 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx.fastmcp_context = mock_context
 
         await mock_context.set_state("unity_instance", "Project@abc123")
-        monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
             SimpleNamespace(name="manage_scene"),
@@ -486,7 +481,6 @@ class TestUnityInstanceMiddlewareInjection:
 
         await mock_context.set_state("unity_instance", "Project@abc123")
         await mock_context.set_state("user_id", "user-123")
-        monkeypatch.setattr(config, "transport_mode", "http")
         monkeypatch.setattr(config, "http_remote_hosted", True)
 
         async def call_next(_ctx):
@@ -521,7 +515,6 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx.fastmcp_context = mock_context
 
         await mock_context.set_state("unity_instance", "Project@stale-hash")
-        monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
             SimpleNamespace(name="manage_scene"),
@@ -560,7 +553,6 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx.fastmcp_context = mock_context
 
         await mock_context.set_state("unity_instance", "Project@abc123")
-        monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
             SimpleNamespace(name="manage_scene"),
@@ -605,7 +597,6 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx.fastmcp_context = mock_context
 
         await mock_context.set_state("unity_instance", "Project@abc123")
-        monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
             SimpleNamespace(name="manage_scene"),
@@ -643,7 +634,6 @@ class TestUnityInstanceMiddlewareInjection:
         middleware_ctx = Mock()
         middleware_ctx.fastmcp_context = mock_context
 
-        monkeypatch.setattr(config, "transport_mode", "http")
 
         original_tools = [
             SimpleNamespace(name="manage_scene"),
@@ -755,7 +745,6 @@ class TestAutoSelectInstance:
 
         with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
             with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get:
-                with patch("transport.legacy.unity_connection.get_unity_connection_pool", return_value=None):
                     mock_get.return_value = fake_sessions
 
                     instance = await middleware._maybe_autoselect_instance(mock_context)
@@ -772,7 +761,6 @@ class TestAutoSelectInstance:
 
         with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
             with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get:
-                with patch("transport.legacy.unity_connection.get_unity_connection_pool", return_value=None):
                     mock_get.side_effect = ConnectionError("Plugin hub unavailable")
 
                     # When PluginHub fails, auto-select returns None (graceful fallback)
@@ -1625,7 +1613,7 @@ class TestSessionResolution:
 
     @pytest.mark.asyncio
     async def test_resolve_session_id_ambiguity_lists_available_instances(self, plugin_registry):
-        """The refusal carries the instance ids (parity with the stdio guard) so
+        """The refusal carries the instance ids so
         agents can select without a second lookup."""
         loop = asyncio.get_event_loop()
         PluginHub.configure(plugin_registry, loop)
@@ -1671,17 +1659,13 @@ class TestSessionResolution:
                 InstanceSelectionRequiredError._MULTIPLE_INSTANCES,
                 available_instances=["A@hash-a", "B@hash-b"])
 
-        monkeypatch.setattr(unity_transport, "_is_http_transport", lambda: True)
         monkeypatch.setattr(
             unity_transport, "_resolve_user_id_from_request", _no_user)
         monkeypatch.setattr(
             unity_transport.PluginHub, "send_command_for_instance", _raise_selection)
 
-        async def _send_fn(*_a, **_k):
-            raise AssertionError("stdio path should not be used on HTTP transport")
-
         resp = await unity_transport.send_with_unity_instance(
-            _send_fn, None, "manage_scene", {})
+            None, "manage_scene", {})
 
         assert resp["success"] is False
         assert resp["hint"] == "select_instance"
@@ -1907,7 +1891,6 @@ class TestTransportEdgeCases:
 
         with patch("transport.unity_instance_middleware.PluginHub.is_configured", return_value=True):
             with patch("transport.unity_instance_middleware.PluginHub.get_sessions", new_callable=AsyncMock) as mock_get:
-                with patch("transport.legacy.unity_connection.get_unity_connection_pool", return_value=None):
                     mock_get.side_effect = RuntimeError("Unexpected error")
 
                     # Should not raise, just return None
@@ -2081,7 +2064,7 @@ Key Behavior Patterns Tested:
 - Thread-safe session storage with RLock
 - Client_id prioritization over session_id for key derivation
 - Lazy singleton pattern for middleware
-- Auto-selection with fallback to stdio
+- Auto-selection of a sole connected instance
 - Reconnect support via hash-based mapping
 - Fast-fail timeouts for UI-blocking commands
 - Graceful degradation on plugin disconnect
@@ -2092,5 +2075,5 @@ Critical Integration Points:
 - Context state used by tools for routing
 - Registry maps hash to session_id for HTTP transport
 - Plugin disconnect cleans up sessions and fails in-flight commands
-- Auto-select probes both PluginHub and stdio with graceful fallback
+- Auto-select probes PluginHub with graceful failure handling
 """

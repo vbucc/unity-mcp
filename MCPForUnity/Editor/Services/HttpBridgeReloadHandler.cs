@@ -8,7 +8,7 @@ using UnityEditor;
 namespace MCPForUnity.Editor.Services
 {
     /// <summary>
-    /// Ensures HTTP transports resume after domain reloads similar to the legacy stdio bridge.
+    /// Ensures the HTTP transport resumes after domain reloads.
     /// </summary>
     [InitializeOnLoad]
     internal static class HttpBridgeReloadHandler
@@ -71,13 +71,13 @@ namespace MCPForUnity.Editor.Services
 
         internal static void OnBeforeAssemblyReloadCore(TransportManager transport)
         {
-            if (transport.IsRunning(TransportMode.Http))
+            if (transport.IsRunning())
             {
                 SessionState.SetBool(ResumeSessionKey, true);
 
                 // beforeAssemblyReload is synchronous; force a synchronous teardown so we do not
                 // leave an orphaned socket due to an unfinished async close handshake.
-                transport.ForceStop(TransportMode.Http);
+                transport.ForceStop();
             }
             // When the bridge is not running, leave any pending flag alone: during a multi-pass
             // compile the next reload lands before the deferred resume ran, and deleting the
@@ -104,13 +104,6 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 if (!SessionState.GetBool(ResumeSessionKey, false)) return false;
-
-                // Only resume HTTP if it is still the selected transport.
-                if (!EditorConfigurationCache.Instance.UseHttpTransport)
-                {
-                    SessionState.EraseBool(ResumeSessionKey);
-                    return false;
-                }
 
                 return true;
             }
@@ -170,22 +163,15 @@ namespace MCPForUnity.Editor.Services
                     // burn a retry, not kill this fire-and-forget task with the flag still set
                     // (which would leave nothing scheduled to consume it until the next reload).
 
-                    // Abort retries if the user switched transports while we were waiting.
-                    if (!EditorConfigurationCache.Instance.UseHttpTransport)
-                    {
-                        SessionState.EraseBool(ResumeSessionKey);
-                        return;
-                    }
-
                     // Never bounce a session someone else established while we were waiting
                     // (WebSocketTransportClient.StartAsync tears down a live connection first).
-                    if (MCPServiceLocator.TransportManager.IsRunning(TransportMode.Http))
+                    if (MCPServiceLocator.TransportManager.IsRunning())
                     {
                         SessionState.EraseBool(ResumeSessionKey);
                         return;
                     }
 
-                    bool started = await MCPServiceLocator.TransportManager.StartAsync(TransportMode.Http);
+                    bool started = await MCPServiceLocator.TransportManager.StartAsync();
                     if (started)
                     {
                         SessionState.EraseBool(ResumeSessionKey);
@@ -194,7 +180,7 @@ namespace MCPForUnity.Editor.Services
                         return;
                     }
 
-                    var state = MCPServiceLocator.TransportManager.GetState(TransportMode.Http);
+                    var state = MCPServiceLocator.TransportManager.GetState();
                     string reason = string.IsNullOrWhiteSpace(state?.Error) ? "no error detail" : state.Error;
                     McpLog.Debug($"[HTTP Reload] Resume attempt {attempt} failed: {reason}");
                 }

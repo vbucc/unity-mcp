@@ -1,7 +1,6 @@
 """
 Defines the manage_asset tool for interacting with Unity assets.
 """
-import asyncio
 import json
 from typing import Annotated, Any, Literal
 
@@ -12,7 +11,6 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.utils import parse_json_payload, coerce_int, normalize_properties
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.preflight import preflight
 
 
@@ -120,10 +118,7 @@ async def manage_asset(
     # Remove None values to avoid sending unnecessary nulls
     params_dict = {k: v for k, v in params_dict.items() if v is not None}
 
-    # Get the current asyncio event loop
-    loop = asyncio.get_running_loop()
-
-    # Use centralized async retry helper with instance routing
-    result = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_asset", params_dict, loop=loop)
+    # Route through the transport shim (PluginHub owns reload retries)
+    result = await send_with_unity_instance(unity_instance, "manage_asset", params_dict)
     # Return the result obtained from Unity
     return result if isinstance(result, dict) else {"success": False, "message": str(result)}

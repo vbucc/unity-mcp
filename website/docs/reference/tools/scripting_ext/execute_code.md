@@ -12,7 +12,7 @@ description: "Execute arbitrary C# code inside the Unity Editor."
 
 ## Description
 
-Execute arbitrary C# code inside the Unity Editor. The code runs as a method body with access to UnityEngine and UnityEditor namespaces. Use 'return' to send data back. Compiled in-memory — no script files created. Actions: execute (run code), get_history (list past executions), replay (re-run a history entry), clear_history. NOTE: safety_checks blocks known dangerous patterns but is not a full sandbox. Compiler options: 'auto' (Roslyn if available, else CodeDom), 'roslyn' (C# 12+, requires Microsoft.CodeAnalysis), 'codedom' (C# 6 only).
+Execute arbitrary C# code inside the Unity Editor. The code runs as a method body with access to UnityEngine and UnityEditor namespaces. Use 'return' to send data back. Compiled in-memory — no script files created. Actions: execute (run code), get_history (list past executions), replay (re-run a history entry), clear_history. NOTE: safety_checks blocks known dangerous patterns but is not a full sandbox. Compiler options: 'auto' (Roslyn if available, else CodeDom), 'roslyn' (C# 12+, requires Microsoft.CodeAnalysis), 'codedom' (C# 6 only). Pass 'usings' to import extra namespaces (e.g. game assemblies like ['p005.Networking']) so types resolve by simple name.
 
 ## Parameters
 
@@ -24,6 +24,7 @@ Execute arbitrary C# code inside the Unity Editor. The code runs as a method bod
 | `index` | `int \| None` | — | History entry index to replay (for 'replay' action). |
 | `limit` | `int` | — | Number of history entries to return (for 'get_history' action, 1-50). Default: 10. |
 | `compiler` | `Literal['auto', 'roslyn', 'codedom']` | — | Compiler backend for 'execute' action. 'auto' uses Roslyn if Microsoft.CodeAnalysis is installed, else falls back to CodeDom. 'roslyn' forces Roslyn (C# 12+). 'codedom' forces legacy CSharpCodeProvider (C# 6). Default: auto. |
+| `usings` | `list[str] \| None` | — | Extra namespaces to import for 'execute' (e.g. ['p005.Networking']) so game types resolve by simple name. |
 
 ## Returns
 

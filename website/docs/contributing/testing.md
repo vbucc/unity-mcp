@@ -44,23 +44,25 @@ CI runs both modes across a multi-Unity matrix via `.github/workflows/unity-test
 
 ### Local headless test harness
 
-One command boots a headless Hub-licensed Editor against `TestProjects/UnityMCPTests` and runs the smoke + EditMode + PlayMode legs over the bridge, then tears down:
+One command starts its own MCP server on a free port, boots a headless Hub-licensed Editor against `TestProjects/UnityMCPTests` pointed at it, runs the smoke + EditMode + PlayMode legs, then tears down:
 
 ```bash
 python tools/local_harness.py
 ```
 
-This is the same entrypoint CI uses — `.github/workflows/e2e-bridge.yml` collapses its boot/wait/discover/run-smoke shell into this invocation.
+**It is safe to run while you are working.** The harness never binds `8080` (or `$UNITY_MCP_HTTP_PORT`), never terminates a process it did not spawn, and never writes EditorPrefs — it points its Editor at its own server with the `UNITY_MCP_HTTP_URL` environment variable. Asking for a reserved port (`--http-port 8080`) is a hard stop.
 
 Key flags:
 
 - `--legs smoke,editmode,playmode` — subset of legs to run.
 - `--project-path TestProjects/UnityMCPTests` — Unity project to boot (repo-relative or absolute).
-- `--reuse` — attach to an already-resident bridge instead of booting one.
-- `--keep-alive` — leave the Editor running after the legs (no teardown).
+- `--http-port` — pin the harness server's port (defaults to a free ephemeral one).
+- `--reuse` — attach to an already-running server + Editor instead of booting one; requires `--http-port`.
+- `--keep-alive` — leave the Editor and server running after the legs (no teardown).
 - `--no-warmup` — skip the warm-up import phase.
+- `--log-dir` — where editor and server logs land.
 
-Exit-code contract: `0` all blocking legs passed, `1` a blocking-leg regression, `2` bridge unreachable / setup failure, `3` project does not compile, `4` no Unity license / Hub seat, `5` Editor binary/version not found.
+Exit-code contract: `0` all blocking legs passed, `1` a blocking-leg regression, `2` bridge unreachable / setup failure / reserved-port refusal, `3` project does not compile, `4` no Unity license / Hub seat, `5` Editor binary/version not found.
 
 It needs a Hub-activated Editor locally (no ULF/serial); none of the CI license staging applies.
 
@@ -94,15 +96,6 @@ To bypass for a single push: `git push --no-verify`. Use this when you're pushin
 ## Pre-commit hook (docs reference)
 
 The same install script wires a pre-commit hook that regenerates `website/docs/reference/` whenever you stage a change under `Server/src/services/{tools,resources,registry}/`. CI fails if you skip this and the committed reference drifts — see `.github/workflows/docs-generate.yml`.
-
-## Stress / load testing
-
-Two scripts under `tools/`:
-
-- `stress_mcp.py` — concurrent MCP tool calls; surfaces middleware contention
-- `stress_editor_state.py` — hammers the `editor_state` resource; surfaces serialization hotspots
-
-These are not part of CI; run them when you change transport, middleware, or hot-path serialization.
 
 ## What CI actually runs on every PR
 

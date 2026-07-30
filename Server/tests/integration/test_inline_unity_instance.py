@@ -28,7 +28,7 @@ class DummyMiddlewareContext:
         self.message = SimpleNamespace(arguments=arguments if arguments is not None else {})
 
 
-def _make_middleware(monkeypatch, *, transport="stdio", plugin_hub_configured=False, sessions=None, pool_instances=None):
+def _make_middleware(monkeypatch, *, plugin_hub_configured=False, sessions=None, pool_instances=None):
     """
     Build a UnityInstanceMiddleware with patched transport dependencies.
 
@@ -60,7 +60,6 @@ def _make_middleware(monkeypatch, *, transport="stdio", plugin_hub_configured=Fa
     from transport.unity_instance_middleware import UnityInstanceMiddleware
 
     middleware = UnityInstanceMiddleware()
-    monkeypatch.setattr(config, "transport_mode", transport)
     monkeypatch.setattr(config, "http_remote_hosted", False)
 
     if pool_instances is not None:
@@ -172,55 +171,6 @@ async def test_inline_overrides_session_persisted_instance(monkeypatch):
     assert await ctx.get_state("unity_instance") == "ProjB@bbb222"
     # Session still pinned to ProjA
     assert await mw.get_active_instance(ctx) == "ProjA@aaa111"
-
-
-# ---------------------------------------------------------------------------
-# Port number resolution (stdio)
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_port_number_resolves_to_name_hash_stdio(monkeypatch):
-    """Bare port number resolves to the matching Name@hash in stdio mode."""
-    instances = [
-        SimpleNamespace(id="Proj@abc123", hash="abc123", port=6401),
-        SimpleNamespace(id="Other@def456", hash="def456", port=6402),
-    ]
-    mw = _make_middleware(monkeypatch, transport="stdio", pool_instances=instances)
-
-    ctx = DummyContext()
-    ctx.client_id = "client-1"
-    mw_ctx = DummyMiddlewareContext(ctx, arguments={"unity_instance": "6401"})
-
-    await mw._inject_unity_instance(mw_ctx)
-
-    assert await ctx.get_state("unity_instance") == "Proj@abc123"
-
-
-@pytest.mark.asyncio
-async def test_port_number_not_found_raises(monkeypatch):
-    """Port number with no matching instance raises ValueError."""
-    instances = [SimpleNamespace(id="Proj@abc123", hash="abc123", port=6401)]
-    mw = _make_middleware(monkeypatch, transport="stdio", pool_instances=instances)
-
-    ctx = DummyContext()
-    ctx.client_id = "client-1"
-    mw_ctx = DummyMiddlewareContext(ctx, arguments={"unity_instance": "9999"})
-
-    with pytest.raises(ValueError, match="No Unity instance found on port 9999"):
-        await mw._inject_unity_instance(mw_ctx)
-
-
-@pytest.mark.asyncio
-async def test_port_number_errors_in_http_mode(monkeypatch):
-    """Bare port number raises ValueError in HTTP transport mode."""
-    mw = _make_middleware(monkeypatch, transport="http")
-
-    ctx = DummyContext()
-    ctx.client_id = "client-1"
-    mw_ctx = DummyMiddlewareContext(ctx, arguments={"unity_instance": "6401"})
-
-    with pytest.raises(ValueError, match="not supported in HTTP transport mode"):
-        await mw._inject_unity_instance(mw_ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -359,52 +309,6 @@ async def test_resource_read_unaffected(monkeypatch):
 # set_active_instance tool: port number support
 # ---------------------------------------------------------------------------
 
-@pytest.mark.asyncio
-async def test_set_active_instance_port_stdio(monkeypatch):
-    """set_active_instance accepts a port number in stdio mode and resolves to Name@hash."""
-    monkeypatch.setattr(config, "transport_mode", "stdio")
-    monkeypatch.setattr(config, "http_remote_hosted", False)
-
-    from transport.unity_instance_middleware import UnityInstanceMiddleware, set_unity_instance_middleware
-    mw = UnityInstanceMiddleware()
-    set_unity_instance_middleware(mw)
-
-    pool_instance = SimpleNamespace(id="Proj@abc123", hash="abc123", port=6401)
-
-    class FakePool:
-        def discover_all_instances(self, force_refresh=False):
-            return [pool_instance]
-
-    import services.tools.set_active_instance as sat
-    monkeypatch.setattr(sat, "get_unity_connection_pool", lambda: FakePool())
-
-    from services.tools.set_active_instance import set_active_instance
-
-    ctx = DummyContext()
-    ctx.client_id = "client-1"
-
-    result = await set_active_instance(ctx, instance="6401")
-
-    assert result["success"] is True
-    assert result["data"]["instance"] == "Proj@abc123"
-    assert await mw.get_active_instance(ctx) == "Proj@abc123"
-
-
-@pytest.mark.asyncio
-async def test_set_active_instance_port_http_errors(monkeypatch):
-    """set_active_instance rejects port numbers in HTTP mode."""
-    monkeypatch.setattr(config, "transport_mode", "http")
-    monkeypatch.setattr(config, "http_remote_hosted", False)
-
-    from services.tools.set_active_instance import set_active_instance
-
-    ctx = DummyContext()
-    ctx.client_id = "client-1"
-
-    result = await set_active_instance(ctx, instance="6401")
-
-    assert result["success"] is False
-    assert "not supported in HTTP transport mode" in result["error"]
 
 
 # ---------------------------------------------------------------------------

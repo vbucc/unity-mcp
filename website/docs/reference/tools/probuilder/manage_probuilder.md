@@ -71,7 +71,7 @@ WORKFLOW TIP: Call get_mesh_info with include='faces' to see face normals and di
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `str` | yes | Action to perform. |
+| `action` | `Literal['ping', 'create_shape', 'create_poly_shape', 'extrude_faces', 'extrude_edges', 'bevel_edges', 'subdivide', 'delete_faces', 'bridge_edges', 'connect_elements', 'detach_faces', 'flip_normals', 'merge_faces', 'combine_meshes', 'merge_objects', 'duplicate_and_flip', 'create_polygon', 'merge_vertices', 'weld_vertices', 'split_vertices', 'move_vertices', 'insert_vertex', 'append_vertices_to_edge', 'select_faces', 'set_face_material', 'set_face_color', 'set_face_uvs', 'get_mesh_info', 'convert_to_probuilder', 'set_smoothing', 'auto_smooth', 'center_pivot', 'freeze_transform', 'set_pivot', 'validate_mesh', 'repair_mesh']` | yes | Action to perform. |
 | `target` | `str \| None` | — | Target GameObject (name/path/id). |
 | `search_method` | `Literal['by_id', 'by_name', 'by_path', 'by_tag', 'by_layer'] \| None` | — | How to find the target GameObject. |
 | `properties` | `dict[str, Any] \| str \| None` | — | Action-specific parameters (dict or JSON string). |

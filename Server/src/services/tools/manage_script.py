@@ -10,7 +10,6 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.refresh_unity import send_mutation, verify_edit_by_sha
 from transport.unity_transport import send_with_unity_instance
-import transport.legacy.unity_connection
 
 # Strong references to fire-and-forget tasks to prevent GC before completion
 _background_tasks: set = set()
@@ -120,7 +119,6 @@ async def apply_text_edits(
     if _needs_normalization(edits):
         # Read file to support index->line/col conversion when needed
         read_resp = await send_with_unity_instance(
-            transport.legacy.unity_connection.async_send_command_with_retry,
             unity_instance,
             "manage_script",
             {
@@ -341,33 +339,17 @@ async def apply_text_edits(
             # Optional: flip sentinel via menu if explicitly requested
             try:
                 import asyncio
-                import json
-                import glob
-                import os
-
-                def _latest_status() -> dict | None:
-                    try:
-                        files = sorted(glob.glob(os.path.expanduser(
-                            "~/.unity-mcp/unity-mcp-status-*.json")), key=os.path.getmtime, reverse=True)
-                        if not files:
-                            return None
-                        with open(files[0], "r") as f:
-                            return json.loads(f.read())
-                    except Exception:
-                        return None
 
                 async def _flip_async():
+                    # Best-effort: if Unity is already reloading the send fails
+                    # fast (retry_on_reload=False) and there is nothing to flip.
                     try:
                         await asyncio.sleep(0.1)
-                        st = _latest_status()
-                        if st and st.get("reloading"):
-                            return
-                        await transport.legacy.unity_connection.async_send_command_with_retry(
+                        await send_with_unity_instance(
+                            unity_instance,
                             "execute_menu_item",
                             {"menuPath": "MCP/Flip Reload Sentinel"},
-                            max_retries=0,
-                            retry_ms=0,
-                            instance_id=unity_instance,
+                            retry_on_reload=False,
                         )
                     except Exception:
                         pass
@@ -427,7 +409,6 @@ async def create_script(
 
     async def _verify_create():
         verify = await send_with_unity_instance(
-            transport.legacy.unity_connection.async_send_command_with_retry,
             unity_instance, "manage_script",
             {"action": "read", "name": name, "path": directory},
         )
@@ -470,7 +451,6 @@ async def validate_script(
         "level": level,
     }
     resp = await send_with_unity_instance(
-        transport.legacy.unity_connection.async_send_command_with_retry,
         unity_instance,
         "manage_script",
         params,
@@ -531,7 +511,6 @@ async def manage_script(
 
         if action == "read":
             response = await send_with_unity_instance(
-                transport.legacy.unity_connection.async_send_command_with_retry,
                 unity_instance,
                 "manage_script",
                 params,
@@ -540,7 +519,6 @@ async def manage_script(
         else:
             async def _verify_mutation():
                 verify = await send_with_unity_instance(
-                    transport.legacy.unity_connection.async_send_command_with_retry,
                     unity_instance, "manage_script",
                     {"action": "read", "name": name, "path": path},
                 )
@@ -634,7 +612,6 @@ async def get_sha(
         name, directory = _split_uri(uri)
         params = {"action": "get_sha", "name": name, "path": directory}
         resp = await send_with_unity_instance(
-            transport.legacy.unity_connection.async_send_command_with_retry,
             unity_instance,
             "manage_script",
             params,

@@ -9,7 +9,7 @@ async def test_run_tests_async_forwards_params(monkeypatch):
 
     captured = {}
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         captured["command_type"] = command_type
         captured["params"] = params
         return {"success": True, "data": {"job_id": "abc123", "status": "running", "mode": "EditMode"}}
@@ -39,7 +39,7 @@ async def test_run_tests_forwards_init_timeout(monkeypatch):
 
     captured = {}
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"job_id": "abc123", "status": "running", "mode": "PlayMode"}}
 
@@ -62,7 +62,7 @@ async def test_run_tests_omits_init_timeout_when_none(monkeypatch):
 
     captured = {}
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"job_id": "abc123", "status": "running", "mode": "EditMode"}}
 
@@ -99,7 +99,7 @@ async def test_get_test_job_forwards_job_id(monkeypatch):
 
     captured = {}
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         captured["command_type"] = command_type
         captured["params"] = params
         return {"success": True, "data": {"job_id": params["job_id"], "status": "running", "mode": "EditMode"}}
@@ -123,7 +123,7 @@ async def test_run_tests_clear_stuck_forwards_param(monkeypatch):
 
     captured = {}
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         captured["command_type"] = command_type
         captured["params"] = params
         return {"success": True, "data": {"cleared": True}, "message": "Stuck job cleared."}
@@ -147,7 +147,7 @@ async def test_run_tests_clear_stuck_no_op_when_nothing_running(monkeypatch):
     from models import MCPResponse
     from services.tools.run_tests import run_tests
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         return {"success": True, "data": {"cleared": False}, "message": "No running job to clear."}
 
     import services.tools.run_tests as mod
@@ -175,7 +175,7 @@ async def test_run_tests_clear_stuck_skips_preflight(monkeypatch):
 
     monkeypatch.setattr(mod, "preflight", fake_preflight)
 
-    async def fake_send_clear(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_clear(unity_instance, command_type, params, **kwargs):
         return {"success": True, "data": {"cleared": True}, "message": "Stuck job cleared."}
 
     monkeypatch.setattr(
@@ -184,7 +184,7 @@ async def test_run_tests_clear_stuck_skips_preflight(monkeypatch):
     await run_tests(DummyContext(), clear_stuck=True)
     assert preflight_called is False, "preflight must be skipped when clear_stuck=True"
 
-    async def fake_send_normal(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_normal(unity_instance, command_type, params, **kwargs):
         return {"success": True, "data": {"job_id": "x", "status": "running"}}
 
     monkeypatch.setattr(
@@ -201,7 +201,7 @@ async def test_run_tests_forwards_discard_untitled_scenes(monkeypatch):
 
     captured = {}
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"job_id": "abc123", "status": "running", "mode": "EditMode"}}
 
@@ -220,7 +220,7 @@ async def test_run_tests_omits_discard_untitled_scenes_by_default(monkeypatch):
 
     captured = {}
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"job_id": "abc123", "status": "running", "mode": "EditMode"}}
 
@@ -239,7 +239,7 @@ async def test_run_tests_passes_through_unsaved_untitled_scene_error(monkeypatch
     from models import MCPResponse
     from services.tools.run_tests import run_tests
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         return {
             "success": False,
             "code": "unsaved_untitled_scene",

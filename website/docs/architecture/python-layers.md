@@ -61,11 +61,11 @@ A tool's `group` parameter controls per-session visibility — see [Tool Groups]
 3. Calls `register_all_resources(mcp)` — same pattern, different decorator
 4. Sets up the WebSocket hub for HTTP transport
 5. Configures middleware (telemetry, normalization, instance routing)
-6. Starts the transport (`http`/`stdio` from `core.config`)
+6. Starts the HTTP transport
 
 ## Where to read more
 
 - Tool/CLI handler shape: `Server/src/services/tools/manage_material.py` is a canonical example
 - Registry: `Server/src/services/registry/tool_registry.py` (~130 LOC, the single source the docs reference generator reads)
-- Transport: `Server/src/transport/` — plugin hub (`plugin_hub.py`), websocket client, legacy stdio bridge
+- Transport: `Server/src/transport/` — plugin hub (`plugin_hub.py`), instance middleware, session recovery
 - C# side: `MCPForUnity/Editor/Tools/ManageMaterial.cs` is the C# half of `manage_material`

@@ -105,7 +105,7 @@ class InstanceSelectionRequiredError(RuntimeError):
     def __init__(self, message: str | None = None,
                  available_instances: list[str] | None = None):
         # Carried structurally so the transport layer can surface the ids without
-        # parsing the message; also appended to the text for parity with the stdio
+        # parsing the message; also appended to the text for parity with the
         # guard, which lists the ids inline.
         self.available_instances = available_instances or []
         text = message or self._SELECTION_REQUIRED
@@ -583,7 +583,7 @@ class PluginHub(WebSocketEndpoint):
         # (e.g. new Claude Code conversations) see the correct tool set.
         await self._sync_server_tool_visibility()
 
-        # Notify any already-connected MCP clients (e.g. CC over stdio) that
+        # Notify any already-connected MCP clients that
         # the tool list has changed so they re-fetch.
         await cls._notify_mcp_tool_list_changed()
 
@@ -621,9 +621,9 @@ class PluginHub(WebSocketEndpoint):
         ``enable`` calls override earlier ``disable`` calls.
 
         Args:
-            registered_tools: If provided, use this explicit tool list (stdio
-                fallback path).  If None, query the registry for the union of
-                all connected sessions' tools (HTTP multi-instance path).
+            registered_tools: If provided, use this explicit tool list (the
+                on-demand ``manage_tools(action="sync")`` path).  If None, query
+                the registry for the union of all connected sessions' tools.
 
         Returns:
             True when the visibility transforms were rewritten, False when the
@@ -639,7 +639,7 @@ class PluginHub(WebSocketEndpoint):
             from services.registry import get_group_tool_names, TOOL_GROUPS
 
             if registered_tools is not None:
-                # Explicit list (stdio fallback path)
+                # Explicit list (manage_tools sync path)
                 registered_names: set[str] = set()
                 for tool in registered_tools:
                     name = getattr(tool, "name", None) if not isinstance(tool, dict) else tool.get("name")
@@ -713,7 +713,7 @@ class PluginHub(WebSocketEndpoint):
         """Send ``tools/list_changed`` to every connected MCP client session.
 
         After server-level tool visibility is updated (e.g. when Unity reports
-        its registered tools), existing MCP clients (especially stdio-based
+        its registered tools), existing MCP clients (especially long-lived
         ones like Claude Code) must be told to re-fetch the tool list.
         FastMCP's ``mcp.enable()``/``mcp.disable()`` update the server-level
         transforms but do **not** push notifications to already-connected

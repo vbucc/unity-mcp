@@ -35,9 +35,6 @@ namespace MCPForUnity.Editor.Clients
         // any future configurator that forgets to override fail-closed rather than be
         // treated as "detected" by ConfigureAllDetectedClients.
         public virtual bool IsInstalled => ParentDirectoryExists(GetConfigPath());
-        private static readonly ConfiguredTransport[] DefaultTransports =
-            { ConfiguredTransport.Stdio, ConfiguredTransport.Http };
-        public virtual IReadOnlyList<ConfiguredTransport> SupportedTransports => DefaultTransports;
         public virtual bool SupportsSkills => false;
         public virtual string GetConfigureActionLabel() => "Configure";
         public virtual string GetSkillInstallPath() => null;
@@ -215,10 +212,15 @@ namespace MCPForUnity.Editor.Clients
                     return client.status;
                 }
 
-                // Determine and set the configured transport type
+                // Determine and set the configured transport type. A config carrying
+                // command/args instead of a url is a leftover stdio registration from an
+                // older package: report it as incomplete so the UI prompts re-Configure
+                // rather than presenting it as healthy.
                 if (args != null && args.Length > 0)
                 {
-                    client.configuredTransport = Models.ConfiguredTransport.Stdio;
+                    client.SetStatus(McpStatus.MissingConfig);
+                    client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                    return client.status;
                 }
                 else if (!string.IsNullOrEmpty(configuredUrl))
                 {
@@ -471,7 +473,10 @@ namespace MCPForUnity.Editor.Clients
                     }
                     else if (args != null && args.Length > 0)
                     {
-                        client.configuredTransport = Models.ConfiguredTransport.Stdio;
+                        // Leftover stdio registration — see the note in CheckStatus above.
+                        client.SetStatus(McpStatus.MissingConfig);
+                        client.configuredTransport = Models.ConfiguredTransport.Unknown;
+                        return client.status;
                     }
                     else
                     {
@@ -661,27 +666,26 @@ namespace MCPForUnity.Editor.Clients
         {
             // Capture main-thread-only values before delegating to thread-safe method
             string projectDir = GetClientProjectDir();
-            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
             // Resolve claudePath on the main thread (EditorPrefs access)
             string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
             RuntimePlatform platform = Application.platform;
             bool isRemoteScope = HttpEndpointUtility.IsRemoteScope();
             // Get expected package source for the installed package version (matches what Register() would use)
             string expectedPackageSource = GetExpectedPackageSourceForValidation();
-            return CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, platform, isRemoteScope, expectedPackageSource, attemptAutoRewrite, HasClientProjectDirOverride);
+            return CheckStatusWithProjectDir(projectDir, claudePath, platform, isRemoteScope, expectedPackageSource, attemptAutoRewrite, HasClientProjectDirOverride);
         }
 
         /// <summary>
         /// Internal thread-safe version of CheckStatus.
         /// Can be called from background threads because all main-thread-only values are passed as parameters.
-        /// projectDir, useHttpTransport, claudePath, platform, isRemoteScope, and expectedPackageSource are REQUIRED
+        /// projectDir, claudePath, platform, isRemoteScope, and expectedPackageSource are REQUIRED
         /// (non-nullable where applicable) to enforce thread safety at compile time.
         /// NOTE: attemptAutoRewrite is NOT fully thread-safe because Configure() requires the main thread.
         /// When called from a background thread, pass attemptAutoRewrite=false and handle re-registration
         /// on the main thread based on the returned status.
         /// </summary>
         internal McpStatus CheckStatusWithProjectDir(
-            string projectDir, bool useHttpTransport, string claudePath, RuntimePlatform platform,
+            string projectDir, string claudePath, RuntimePlatform platform,
             bool isRemoteScope, string expectedPackageSource,
             bool attemptAutoRewrite = false, bool hasProjectDirOverride = false)
         {
@@ -718,8 +722,7 @@ namespace MCPForUnity.Editor.Clients
                     return client.status;
                 }
 
-                // UnityMCP is registered - check transport and version
-                bool currentUseHttp = useHttpTransport;
+                // UnityMCP is registered - check the transport it was registered with
                 var serverConfig = configResult.serverConfig;
 
                 // Determine registered transport type
@@ -734,68 +737,24 @@ namespace MCPForUnity.Editor.Clients
                         ? Models.ConfiguredTransport.HttpRemote
                         : Models.ConfiguredTransport.Http;
                 }
-                else if (registeredWithStdio)
-                {
-                    client.configuredTransport = Models.ConfiguredTransport.Stdio;
-                }
                 else
                 {
                     client.configuredTransport = Models.ConfiguredTransport.Unknown;
                 }
 
-                // Check for transport mismatch.
-                // When a project dir override is active, the local UseHttpTransport
-                // GUI setting may legitimately differ from the registered transport
-                // in the overridden project, so skip this check.
-                bool hasTransportMismatch = !hasProjectDirOverride
-                    && ((currentUseHttp && registeredWithStdio) || (!currentUseHttp && registeredWithHttp));
+                // A stdio registration is always stale now. When a project dir override is
+                // active the registration belongs to another project, so skip the check.
+                bool hasTransportMismatch = !hasProjectDirOverride && registeredWithStdio;
 
-                // For stdio transport, also check package version
-                bool hasVersionMismatch = false;
-                string configuredPackageSource = null;
-                string mismatchReason = null;
-                if (registeredWithStdio)
-                {
-                    configuredPackageSource = ExtractPackageSourceFromConfig(serverConfig);
-                    if (!string.IsNullOrEmpty(configuredPackageSource) && !string.IsNullOrEmpty(expectedPackageSource))
-                    {
-                        // Check for exact match first
-                        if (!string.Equals(configuredPackageSource, expectedPackageSource, StringComparison.OrdinalIgnoreCase))
-                        {
-                            hasVersionMismatch = true;
-
-                            // Provide more specific mismatch reason for beta/stable differences
-                            bool configuredIsBeta = IsBetaPackageSource(configuredPackageSource);
-                            bool expectedIsBeta = IsBetaPackageSource(expectedPackageSource);
-
-                            if (configuredIsBeta && !expectedIsBeta)
-                            {
-                                mismatchReason = "Configured for prerelease server, but this package is stable. Re-configure to switch to stable.";
-                            }
-                            else if (!configuredIsBeta && expectedIsBeta)
-                            {
-                                mismatchReason = "Configured for stable server, but this package is prerelease. Re-configure to switch to prerelease.";
-                            }
-                            else
-                            {
-                                mismatchReason = "Server version doesn't match the plugin. Re-configure to update.";
-                            }
-                        }
-                    }
-                }
-
-                // If there's any mismatch and auto-rewrite is enabled, re-register
-                if (hasTransportMismatch || hasVersionMismatch)
+                // If there's a mismatch and auto-rewrite is enabled, re-register
+                if (hasTransportMismatch)
                 {
                     // Configure() requires main thread (accesses EditorPrefs, Application.dataPath)
                     // Only attempt auto-rewrite if we're on the main thread
                     bool isMainThread = System.Threading.Thread.CurrentThread.ManagedThreadId == 1;
                     if (attemptAutoRewrite && isMainThread)
                     {
-                        string reason = hasTransportMismatch
-                            ? $"Transport mismatch (registered: {(registeredWithHttp ? "HTTP" : "stdio")}, expected: {(currentUseHttp ? "HTTP" : "stdio")})"
-                            : mismatchReason ?? $"Package version mismatch";
-                        McpLog.Info($"{reason}. Re-registering...");
+                        McpLog.Info("Claude Code is registered with the removed stdio transport. Re-registering over HTTP...");
                         try
                         {
                             // Force re-register by ensuring status is not Configured (which would toggle to Unregister)
@@ -812,16 +771,9 @@ namespace MCPForUnity.Editor.Clients
                     }
                     else
                     {
-                        if (hasTransportMismatch)
-                        {
-                            string errorMsg = $"Transport mismatch: Claude Code is registered with {(registeredWithHttp ? "HTTP" : "stdio")} but current setting is {(currentUseHttp ? "HTTP" : "stdio")}. Click Configure to re-register.";
-                            client.SetStatus(McpStatus.Error, errorMsg);
-                            McpLog.Warn(errorMsg);
-                        }
-                        else
-                        {
-                            client.SetStatus(McpStatus.VersionMismatch, mismatchReason);
-                        }
+                        string errorMsg = "Claude Code is registered with the removed stdio transport. Click Configure to re-register over HTTP.";
+                        client.SetStatus(McpStatus.Error, errorMsg);
+                        McpLog.Warn(errorMsg);
                         return client.status;
                     }
                 }
@@ -857,9 +809,7 @@ namespace MCPForUnity.Editor.Clients
         /// </summary>
         public void ConfigureWithCapturedValues(
             string projectDir, string claudePath, string pathPrepend,
-            bool useHttpTransport, string httpUrl,
-            string uvxPath, string fromArgs, string packageName, string uvxDevFlags,
-            string apiKey,
+            string httpUrl, string apiKey,
             Models.ConfiguredTransport serverTransport)
         {
             if (client.status == McpStatus.Configured)
@@ -869,8 +819,7 @@ namespace MCPForUnity.Editor.Clients
             else
             {
                 RegisterWithCapturedValues(projectDir, claudePath, pathPrepend,
-                    useHttpTransport, httpUrl, uvxPath, fromArgs, packageName, uvxDevFlags,
-                    apiKey, serverTransport);
+                    httpUrl, apiKey, serverTransport);
             }
         }
 
@@ -879,9 +828,7 @@ namespace MCPForUnity.Editor.Clients
         /// </summary>
         private void RegisterWithCapturedValues(
             string projectDir, string claudePath, string pathPrepend,
-            bool useHttpTransport, string httpUrl,
-            string uvxPath, string fromArgs, string packageName, string uvxDevFlags,
-            string apiKey,
+            string httpUrl, string apiKey,
             Models.ConfiguredTransport serverTransport)
         {
             if (string.IsNullOrEmpty(claudePath))
@@ -889,25 +836,17 @@ namespace MCPForUnity.Editor.Clients
                 throw new InvalidOperationException("Claude CLI not found. Please install Claude Code first.");
             }
 
+            // Only include API key header for remote-hosted mode
+            // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
             string args;
-            if (useHttpTransport)
+            if (serverTransport == Models.ConfiguredTransport.HttpRemote && !string.IsNullOrEmpty(apiKey))
             {
-                // Only include API key header for remote-hosted mode
-                // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
-                if (serverTransport == Models.ConfiguredTransport.HttpRemote && !string.IsNullOrEmpty(apiKey))
-                {
-                    string safeKey = SanitizeShellHeaderValue(apiKey);
-                    args = $"mcp add --scope local --transport http UnityMCP {httpUrl} --header \"{AuthConstants.ApiKeyHeader}: {safeKey}\"";
-                }
-                else
-                {
-                    args = $"mcp add --scope local --transport http UnityMCP {httpUrl}";
-                }
+                string safeKey = SanitizeShellHeaderValue(apiKey);
+                args = $"mcp add --scope local --transport http UnityMCP {httpUrl} --header \"{AuthConstants.ApiKeyHeader}: {safeKey}\"";
             }
             else
             {
-                // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
-                args = $"mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {uvxDevFlags}{fromArgs} {packageName}";
+                args = $"mcp add --scope local --transport http UnityMCP {httpUrl}";
             }
 
             // Remove any existing registrations from ALL scopes to prevent stale config conflicts (#664)
@@ -920,7 +859,7 @@ namespace MCPForUnity.Editor.Clients
                 throw new InvalidOperationException($"Failed to register with Claude Code:\n{stderr}\n{stdout}");
             }
 
-            McpLog.Info($"Successfully registered with Claude Code using {(useHttpTransport ? "HTTP" : "stdio")} transport.");
+            McpLog.Info("Successfully registered with Claude Code using HTTP transport.");
             client.SetStatus(McpStatus.Configured);
             client.configuredTransport = serverTransport;
         }
@@ -953,39 +892,19 @@ namespace MCPForUnity.Editor.Clients
                 throw new InvalidOperationException("Claude CLI not found. Please install Claude Code first.");
             }
 
-            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
+            string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
 
-            string args;
-            if (useHttpTransport)
+            // Only include API key header for remote-hosted mode
+            // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
+            string args = $"mcp add --scope local --transport http UnityMCP {httpUrl}";
+            if (HttpEndpointUtility.IsRemoteScope())
             {
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
-                // Only include API key header for remote-hosted mode
-                // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
-                if (HttpEndpointUtility.IsRemoteScope())
+                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                if (!string.IsNullOrEmpty(apiKey))
                 {
-                    string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
-                    if (!string.IsNullOrEmpty(apiKey))
-                    {
-                        string safeKey = SanitizeShellHeaderValue(apiKey);
-                        args = $"mcp add --scope local --transport http UnityMCP {httpUrl} --header \"{AuthConstants.ApiKeyHeader}: {safeKey}\"";
-                    }
-                    else
-                    {
-                        args = $"mcp add --scope local --transport http UnityMCP {httpUrl}";
-                    }
+                    string safeKey = SanitizeShellHeaderValue(apiKey);
+                    args += $" --header \"{AuthConstants.ApiKeyHeader}: {safeKey}\"";
                 }
-                else
-                {
-                    args = $"mcp add --scope local --transport http UnityMCP {httpUrl}";
-                }
-            }
-            else
-            {
-                var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
-                string devFlags = AssetPathUtility.GetUvxDevFlags();
-                string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
-                // Use --scope local to register in the project-local config, avoiding conflicts with user-level config (#664)
-                args = $"mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}{fromArgs} {packageName}";
             }
 
             string projectDir = GetClientProjectDir();
@@ -1022,7 +941,7 @@ namespace MCPForUnity.Editor.Clients
                 throw new InvalidOperationException($"Failed to register with Claude Code:\n{stderr}\n{stdout}");
             }
 
-            McpLog.Info($"Successfully registered with Claude Code using {(useHttpTransport ? "HTTP" : "stdio")} transport.");
+            McpLog.Info("Successfully registered with Claude Code using HTTP transport.");
 
             // Set status to Configured immediately after successful registration
             // The UI will trigger an async verification check separately to avoid blocking
@@ -1062,39 +981,16 @@ namespace MCPForUnity.Editor.Clients
 
         public override string GetManualSnippet()
         {
-            string uvxPath = MCPServiceLocator.Paths.GetUvxPath();
-            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
-
-            if (useHttpTransport)
+            string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
+            // Only include API key header for remote-hosted mode
+            string headerArg = "";
+            if (HttpEndpointUtility.IsRemoteScope())
             {
-                string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
-                // Only include API key header for remote-hosted mode
-                string headerArg = "";
-                if (HttpEndpointUtility.IsRemoteScope())
-                {
-                    string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
-                    headerArg = !string.IsNullOrEmpty(apiKey) ? $" --header \"{AuthConstants.ApiKeyHeader}: {SanitizeShellHeaderValue(apiKey)}\"" : "";
-                }
-                return "# Register the MCP server with Claude Code:\n" +
-                       $"claude mcp add --scope local --transport http UnityMCP {httpUrl}{headerArg}\n\n" +
-                       "# Unregister the MCP server (from all scopes to clean up any stale configs):\n" +
-                       "claude mcp remove --scope local UnityMCP\n" +
-                       "claude mcp remove --scope user UnityMCP\n" +
-                       "claude mcp remove --scope project UnityMCP\n\n" +
-                       "# List registered servers:\n" +
-                       "claude mcp list";
+                string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
+                headerArg = !string.IsNullOrEmpty(apiKey) ? $" --header \"{AuthConstants.ApiKeyHeader}: {SanitizeShellHeaderValue(apiKey)}\"" : "";
             }
-
-            if (string.IsNullOrEmpty(uvxPath))
-            {
-                return "# Error: Configuration not available - check paths in Advanced Settings";
-            }
-
-            string devFlags = AssetPathUtility.GetUvxDevFlags();
-            string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
-
             return "# Register the MCP server with Claude Code:\n" +
-                   $"claude mcp add --scope local --transport stdio UnityMCP -- \"{uvxPath}\" {devFlags}{fromArgs} mcp-for-unity\n\n" +
+                   $"claude mcp add --scope local --transport http UnityMCP {httpUrl}{headerArg}\n\n" +
                    "# Unregister the MCP server (from all scopes to clean up any stale configs):\n" +
                    "claude mcp remove --scope local UnityMCP\n" +
                    "claude mcp remove --scope user UnityMCP\n" +
@@ -1431,7 +1327,7 @@ namespace MCPForUnity.Editor.Clients
 
         /// <summary>
         /// Extracts the package source from Claude Code JSON config.
-        /// For stdio servers, this is in the args array after "--from".
+        /// For legacy stdio configs, this is in the args array after "--from".
         /// </summary>
         private static string ExtractPackageSourceFromConfig(JObject serverConfig)
         {

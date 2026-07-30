@@ -242,7 +242,7 @@ namespace MCPForUnity.Editor.Services
             // Ephemeral batch editors (CI legs, check-unity-versions --full, headless test runs) must
             // never start or restart the machine-shared HTTP server: StopLocalHttpServerInternal below
             // first terminates whatever owns the port, which would kill a developer's live server.
-            // Mirrors the batch guards in HttpAutoStartHandler and StdioBridgeHost; set
+            // Mirrors the batch guard in HttpAutoStartHandler; set
             // UNITY_MCP_ALLOW_BATCH to opt deliberate batch automation back in (as claude-nl-suite.yml does).
             if (ShouldSkipBatchServerStart(
                     Application.isBatchMode,
@@ -396,7 +396,7 @@ namespace MCPForUnity.Editor.Services
 
         /// <summary>
         /// True when a headless/batch editor must not start or restart the shared HTTP server.
-        /// Mirrors the batch guards in HttpAutoStartHandler and StdioBridgeHost.
+        /// Mirrors the batch guard in HttpAutoStartHandler.
         /// </summary>
         internal static bool ShouldSkipBatchServerStart(bool isBatchMode, string allowBatchEnv)
             => isBatchMode && string.IsNullOrWhiteSpace(allowBatchEnv);
@@ -1000,12 +1000,6 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public bool CanStartLocalServer()
         {
-            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
-            if (!useHttpTransport)
-            {
-                return false;
-            }
-
             string httpUrl = HttpEndpointUtility.GetLocalBaseUrl();
             return HttpEndpointUtility.IsHttpLocalUrlAllowedForLaunch(httpUrl, out _);
         }

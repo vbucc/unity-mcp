@@ -191,7 +191,7 @@ async def test_read_console_during_simulated_reload(monkeypatch):
     import services.tools.read_console
     monkeypatch.setattr(
         services.tools.read_console,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send_command
     )
 

@@ -170,7 +170,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
 
             if (autoStartOnLoadToggle != null)
             {
-                autoStartOnLoadToggle.tooltip = "Automatically start the local HTTP server and connect the MCP bridge when the Unity Editor opens. Only applies to HTTP transport (stdio always auto-starts).";
+                autoStartOnLoadToggle.tooltip = "Automatically start the local HTTP server and connect the MCP bridge when the Unity Editor opens.";
                 var autoStartLabel = autoStartOnLoadToggle.parent?.Q<Label>();
                 if (autoStartLabel != null)
                     autoStartLabel.tooltip = autoStartOnLoadToggle.tooltip;

@@ -82,33 +82,6 @@
 }
 ```
 
-<details>
-<summary>Stdio 配置（uvx）</summary>
-
-**macOS/Linux：**
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "command": "uvx",
-      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
-    }
-  }
-}
-```
-
-**Windows：**
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "command": "C:/Users/YOUR_USERNAME/AppData/Local/Microsoft/WinGet/Links/uvx.exe",
-      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
-    }
-  }
-}
-```
-</details>
 </details>
 
 ---

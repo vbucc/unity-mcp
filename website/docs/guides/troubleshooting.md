@@ -111,7 +111,7 @@ For example:
 claude mcp add --transport http UnityMCP http://172.21.48.1:8090/mcp
 ```
 
-Note: this uses **HTTP transport**, not stdio — since the server is running on the Windows side.
+Note: the server runs on the Windows side and Unity connects to it over HTTP.
 
 ### 6. Verify
 

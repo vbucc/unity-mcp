@@ -421,7 +421,7 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             var service = MCPServiceLocator.Bridge;
 
             Assert.IsNotNull(service, "BridgeControlService should be available via locator");
-            Assert.Pass("BridgeControlService reads UseHttpTransport from EditorPrefs on each call");
+            Assert.Pass("BridgeControlService delegates lifecycle to the single TransportManager client");
         }
 
         /// <summary>

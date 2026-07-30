@@ -38,7 +38,7 @@ UTILITY:
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `str` | yes | The package action to perform. |
+| `action` | `Literal['list_packages', 'search_packages', 'get_package_info', 'ping', 'status', 'add_package', 'remove_package', 'embed_package', 'resolve_packages', 'add_registry', 'remove_registry', 'list_registries']` | yes | The package action to perform. |
 | `package` | `str \| None` | — | Package identifier (name, name@version, git URL, or file: path). |
 | `force` | `bool \| None` | — | Force removal even if other packages depend on it. |
 | `query` | `str \| None` | — | Search query for search_packages. |

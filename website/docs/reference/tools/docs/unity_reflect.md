@@ -23,7 +23,7 @@ Actions:
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `str` | yes | The reflection action to perform. |
+| `action` | `Literal['get_type', 'get_member', 'search']` | yes | The reflection action to perform. |
 | `class_name` | `str \| None` | — | Fully qualified or simple C# class name. |
 | `member_name` | `str \| None` | — | Method, property, or field name to inspect. |
 | `query` | `str \| None` | — | Search query for type name search. |

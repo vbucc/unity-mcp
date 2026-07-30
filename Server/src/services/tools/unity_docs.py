@@ -521,7 +521,6 @@ async def _search_assets(ctx: Any, query: str) -> dict[str, Any] | None:
     try:
         from services.tools import get_unity_instance_from_context
         from transport.unity_transport import send_with_unity_instance
-        from transport.legacy.unity_connection import async_send_command_with_retry
 
         unity_instance = await get_unity_instance_from_context(ctx)
 
@@ -537,7 +536,7 @@ async def _search_assets(ctx: Any, query: str) -> dict[str, Any] | None:
             search_params: dict[str, Any] = {"action": "search", "path": "Assets", "pageSize": 10}
             search_params.update(params)
             result = await send_with_unity_instance(
-                async_send_command_with_retry, unity_instance, "manage_asset", search_params,
+                unity_instance, "manage_asset", search_params,
             )
             if isinstance(result, dict) and result.get("success"):
                 return result.get("data", {}).get("assets", [])

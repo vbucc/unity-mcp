@@ -22,7 +22,6 @@ namespace MCPForUnityTests.Editor.Services
         private bool _savedConnectPending;
         private bool _savedResumeFlag;
         private bool _savedAutoStart;
-        private bool _savedUseHttpTransport;
 
         [SetUp]
         public void SetUp()
@@ -31,19 +30,17 @@ namespace MCPForUnityTests.Editor.Services
             _savedConnectPending = SessionState.GetBool(HttpAutoStartHandler.ConnectPendingKey, false);
             _savedResumeFlag = SessionState.GetBool(HttpBridgeReloadHandler.ResumeSessionKey, false);
             _savedAutoStart = EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false);
-            _savedUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _savedManager = MCPServiceLocator.TransportManager;
 
             SessionState.EraseBool(HttpAutoStartHandler.SessionInitKey);
             SessionState.EraseBool(HttpAutoStartHandler.ConnectPendingKey);
             SessionState.EraseBool(HttpBridgeReloadHandler.ResumeSessionKey);
             EditorPrefs.SetBool(EditorPrefKeys.AutoStartOnLoad, false);
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorConfigurationCache.Instance.Refresh();
 
             _fakeClient = new FakeTransportClient();
             var manager = new TransportManager();
-            manager.Configure(() => _fakeClient, () => _fakeClient);
+            manager.Configure(() => _fakeClient);
             MCPServiceLocator.Register(manager);
         }
 
@@ -55,7 +52,6 @@ namespace MCPForUnityTests.Editor.Services
             SessionState.SetBool(HttpAutoStartHandler.ConnectPendingKey, _savedConnectPending);
             SessionState.SetBool(HttpBridgeReloadHandler.ResumeSessionKey, _savedResumeFlag);
             EditorPrefs.SetBool(EditorPrefKeys.AutoStartOnLoad, _savedAutoStart);
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _savedUseHttpTransport);
             EditorConfigurationCache.Instance.Refresh();
             MCPServiceLocator.Register(_savedManager);
         }
@@ -166,23 +162,12 @@ namespace MCPForUnityTests.Editor.Services
             Assert.IsFalse(ConnectPendingSet, "a deliberate drop must consume the pending marker");
         }
 
-        [Test]
-        public void TryBeginReconnect_StdioSelected_DropsPendingReconnect()
-        {
-            EditorPrefs.SetBool(EditorPrefKeys.AutoStartOnLoad, true);
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
-            EditorConfigurationCache.Instance.Refresh();
-            SessionState.SetBool(HttpAutoStartHandler.ConnectPendingKey, true);
-
-            Assert.IsTrue(HttpAutoStartHandler.TryBeginReconnect());
-            Assert.IsFalse(ConnectPendingSet);
-        }
 
         [Test]
         public void TryBeginReconnect_BridgeAlreadyRunning_DropsPendingReconnect()
         {
             EditorPrefs.SetBool(EditorPrefKeys.AutoStartOnLoad, true);
-            var start = MCPServiceLocator.TransportManager.StartAsync(TransportMode.Http);
+            var start = MCPServiceLocator.TransportManager.StartAsync();
             Assert.IsTrue(start.IsCompleted && start.Result, "fake bridge should start synchronously");
             SessionState.SetBool(HttpAutoStartHandler.ConnectPendingKey, true);
 

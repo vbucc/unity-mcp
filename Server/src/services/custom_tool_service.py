@@ -2,7 +2,6 @@ import asyncio
 import inspect
 import logging
 import time
-from hashlib import sha256
 from typing import Optional
 
 from fastmcp import Context, FastMCP
@@ -15,10 +14,6 @@ from models.models import MCPResponse, ToolDefinitionModel, ToolParameterModel
 from core.logging_decorator import log_execution
 from core.telemetry_decorator import telemetry_tool
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import (
-    async_send_command_with_retry,
-    get_unity_connection_pool,
-)
 from transport.plugin_hub import PluginHub
 from services.tools import get_unity_instance_from_context
 from services.registry import get_registered_tools
@@ -146,7 +141,6 @@ class CustomToolService:
             )
 
         response = await send_with_unity_instance(
-            async_send_command_with_retry,
             unity_instance,
             tool_name,
             params,
@@ -217,7 +211,6 @@ class CustomToolService:
 
             try:
                 response = await send_with_unity_instance(
-                    async_send_command_with_retry,
                     unity_instance,
                     tool_name,
                     poll_params,
@@ -471,57 +464,11 @@ class CustomToolService:
             return value
 
 
-def compute_project_id(project_name: str, project_path: str) -> str:
-    """
-    DEPRECATED: Computes a SHA256-based project ID.
-    This function is no longer used as of the multi-session fix.
-    Unity instances now use their native project_hash (SHA1-based) for consistency
-    across stdio and WebSocket transports.
-    """
-    combined = f"{project_name}:{project_path}"
-    return sha256(combined.encode("utf-8")).hexdigest().upper()[:16]
-
-
 def resolve_project_id_for_unity_instance(unity_instance: str | None) -> str | None:
     if unity_instance is None:
         return None
 
-    # stdio transport: resolve via discovered instances with name+path
-    try:
-        pool = get_unity_connection_pool()
-        instances = pool.discover_all_instances()
-        target = None
-        if "@" in unity_instance:
-            name_part, _, hash_hint = unity_instance.partition("@")
-            target = next(
-                (
-                    inst for inst in instances
-                    if inst.name == name_part and inst.hash.startswith(hash_hint)
-                ),
-                None,
-            )
-        else:
-            target = next(
-                (
-                    inst for inst in instances
-                    if inst.id == unity_instance or inst.hash.startswith(unity_instance)
-                ),
-                None,
-            )
-
-        if target:
-            # Return the project_hash from Unity (not a computed SHA256 hash).
-            # This matches the hash Unity uses when registering tools via WebSocket.
-            if target.hash:
-                return target.hash
-            logger.warning(
-                f"Unity instance {target.id} has empty hash; cannot resolve project ID")
-            return None
-    except Exception:
-        logger.debug(
-            f"Failed to resolve project id via connection pool for {unity_instance}")
-
-    # HTTP/WebSocket transport: resolve via PluginHub using project_hash
+    # Resolve via PluginHub using project_hash
     try:
         hash_part: Optional[str] = None
         if "@" in unity_instance:

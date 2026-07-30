@@ -24,7 +24,7 @@ Actions:
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `str` | yes | The documentation action to perform. |
+| `action` | `Literal['get_doc', 'get_manual', 'get_package_doc', 'lookup']` | yes | The documentation action to perform. |
 | `class_name` | `str \| None` | — | Unity class name (e.g. 'Physics', 'Transform'). |
 | `member_name` | `str \| None` | — | Method or property name to look up. |
 | `version` | `str \| None` | — | Unity version (e.g. '6000.0.38f1'). Auto-extracted. |

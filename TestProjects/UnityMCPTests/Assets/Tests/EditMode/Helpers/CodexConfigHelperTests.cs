@@ -12,32 +12,6 @@ namespace MCPForUnityTests.Editor.Helpers
 {
     public class CodexConfigHelperTests
     {
-        /// <summary>
-        /// Validates that a TOML args array contains the expected uvx structure:
-        /// --from, a mcpforunityserver reference, mcp-for-unity package name,
-        /// and optionally --prerelease/explicit (only for prerelease builds).
-        /// </summary>
-        private static void AssertValidUvxArgs(TomlArray args)
-        {
-            var argValues = new List<string>();
-            foreach (TomlNode child in args.Children)
-                argValues.Add((child as TomlString).Value);
-
-            Assert.IsTrue(argValues.Contains("--from"), "Args should contain --from");
-            // The fork's default source is the Studio-Pronto git URL; the beta path still uses the PyPI name.
-            Assert.IsTrue(argValues.Any(a => a.Contains("mcpforunityserver") || a.Contains("unity-mcp#subdirectory=Server")),
-                "Args should contain the server package reference (PyPI name or git URL)");
-            Assert.IsTrue(argValues.Contains("mcp-for-unity"), "Args should contain package name");
-
-            // Prerelease builds include --prerelease explicit before --from
-            int fromIndex = argValues.IndexOf("--from");
-            int prereleaseIndex = argValues.IndexOf("--prerelease");
-            if (prereleaseIndex >= 0)
-            {
-                Assert.IsTrue(prereleaseIndex < fromIndex, "--prerelease should come before --from");
-                Assert.AreEqual("explicit", argValues[prereleaseIndex + 1], "--prerelease should be followed by explicit");
-            }
-        }
 
         /// <summary>
         /// Mock platform service for testing
@@ -59,8 +33,6 @@ namespace MCPForUnityTests.Editor.Helpers
 
         private bool _hadGitOverride;
         private string _originalGitOverride;
-        private bool _hadHttpTransport;
-        private bool _originalHttpTransport;
         private bool _hadDevForceRefresh;
         private bool _originalDevForceRefresh;
         private IPlatformService _originalPlatformService;
@@ -70,8 +42,6 @@ namespace MCPForUnityTests.Editor.Helpers
         {
             _hadGitOverride = EditorPrefs.HasKey(EditorPrefKeys.GitUrlOverride);
             _originalGitOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
-            _hadHttpTransport = EditorPrefs.HasKey(EditorPrefKeys.UseHttpTransport);
-            _originalHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _hadDevForceRefresh = EditorPrefs.HasKey(EditorPrefKeys.DevModeForceServerRefresh);
             _originalDevForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             _originalPlatformService = MCPServiceLocator.Platform;
@@ -82,8 +52,6 @@ namespace MCPForUnityTests.Editor.Helpers
         {
             // Ensure per-test deterministic Git URL (ignore developer overrides)
             EditorPrefs.DeleteKey(EditorPrefKeys.GitUrlOverride);
-            // Default to stdio mode for existing tests unless specified otherwise
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
             // Ensure deterministic uvx args ordering for these tests regardless of editor settings
             // (dev-mode inserts --no-cache/--refresh, which changes the first args).
             EditorPrefs.SetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
@@ -122,14 +90,6 @@ namespace MCPForUnityTests.Editor.Helpers
                 EditorPrefs.DeleteKey(EditorPrefKeys.GitUrlOverride);
             }
 
-            if (_hadHttpTransport)
-            {
-                EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _originalHttpTransport);
-            }
-            else
-            {
-                EditorPrefs.DeleteKey(EditorPrefKeys.UseHttpTransport);
-            }
 
             if (_hadDevForceRefresh)
             {
@@ -231,236 +191,9 @@ namespace MCPForUnityTests.Editor.Helpers
             CollectionAssert.AreEqual(new[] { "mcp-for-unity" }, args);
         }
 
-        [Test]
-        public void BuildCodexServerBlock_OnWindows_IncludesSystemRootEnv()
-        {
-            // This test verifies that Windows-specific environment configuration is included in stdio mode
 
-            // Force stdio mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
 
-            // Mock Windows platform
-            MCPServiceLocator.Register<IPlatformService>(new MockPlatformService(isWindows: true));
 
-            string uvPath = "C:\\Program Files\\uv\\uv.exe";
-
-            string result = CodexConfigHelper.BuildCodexServerBlock(uvPath);
-
-            Assert.IsNotNull(result, "BuildCodexServerBlock should return a valid TOML string");
-
-            // Parse the generated TOML to validate structure
-            TomlTable parsed;
-            using (var reader = new StringReader(result))
-            {
-                parsed = TOML.Parse(reader);
-            }
-
-            // Verify basic structure
-            Assert.IsTrue(parsed.TryGetNode("mcp_servers", out var mcpServersNode), "TOML should contain mcp_servers");
-            Assert.IsInstanceOf<TomlTable>(mcpServersNode, "mcp_servers should be a table");
-
-            var mcpServers = mcpServersNode as TomlTable;
-            Assert.IsTrue(mcpServers.TryGetNode("unityMCP", out var unityMcpNode), "mcp_servers should contain unityMCP");
-            Assert.IsInstanceOf<TomlTable>(unityMcpNode, "unityMCP should be a table");
-
-            var unityMcp = unityMcpNode as TomlTable;
-            Assert.IsTrue(unityMcp.TryGetNode("command", out var commandNode), "unityMCP should contain command");
-            Assert.IsTrue(unityMcp.TryGetNode("args", out var argsNode), "unityMCP should contain args");
-
-            // Verify command contains uvx
-            var command = (commandNode as TomlString).Value;
-            Assert.IsTrue(command.Contains("uvx"), "Command should contain uvx");
-
-            // Verify args contains the proper uvx command structure
-            var args = argsNode as TomlArray;
-            AssertValidUvxArgs(args);
-
-            // Verify env.SystemRoot is present on Windows
-            bool hasEnv = unityMcp.TryGetNode("env", out var envNode);
-            Assert.IsTrue(hasEnv, "Windows config should contain env table");
-            Assert.IsInstanceOf<TomlTable>(envNode, "env should be a table");
-
-            var env = envNode as TomlTable;
-            Assert.IsTrue(env.TryGetNode("SystemRoot", out var systemRootNode), "env should contain SystemRoot");
-            Assert.IsInstanceOf<TomlString>(systemRootNode, "SystemRoot should be a string");
-
-            var systemRoot = (systemRootNode as TomlString).Value;
-            Assert.AreEqual("C:\\Windows", systemRoot, "SystemRoot should be C:\\Windows");
-        }
-
-        [Test]
-        public void BuildCodexServerBlock_OnNonWindows_ExcludesEnv()
-        {
-            // This test verifies that non-Windows platforms don't include env configuration in stdio mode
-
-            // Force stdio mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
-
-            // Mock non-Windows platform (e.g., macOS/Linux)
-            MCPServiceLocator.Register<IPlatformService>(new MockPlatformService(isWindows: false));
-
-            string uvPath = "/usr/local/bin/uv";
-
-            string result = CodexConfigHelper.BuildCodexServerBlock(uvPath);
-
-            Assert.IsNotNull(result, "BuildCodexServerBlock should return a valid TOML string");
-
-            // Parse the generated TOML to validate structure
-            TomlTable parsed;
-            using (var reader = new StringReader(result))
-            {
-                parsed = TOML.Parse(reader);
-            }
-
-            // Verify basic structure
-            Assert.IsTrue(parsed.TryGetNode("mcp_servers", out var mcpServersNode), "TOML should contain mcp_servers");
-            Assert.IsInstanceOf<TomlTable>(mcpServersNode, "mcp_servers should be a table");
-
-            var mcpServers = mcpServersNode as TomlTable;
-            Assert.IsTrue(mcpServers.TryGetNode("unityMCP", out var unityMcpNode), "mcp_servers should contain unityMCP");
-            Assert.IsInstanceOf<TomlTable>(unityMcpNode, "unityMCP should be a table");
-
-            var unityMcp = unityMcpNode as TomlTable;
-            Assert.IsTrue(unityMcp.TryGetNode("command", out var commandNode), "unityMCP should contain command");
-            Assert.IsTrue(unityMcp.TryGetNode("args", out var argsNode), "unityMCP should contain args");
-
-            // Verify command contains uvx
-            var command = (commandNode as TomlString).Value;
-            Assert.IsTrue(command.Contains("uvx"), "Command should contain uvx");
-
-            // Verify args contains the proper uvx command structure
-            var args = argsNode as TomlArray;
-            AssertValidUvxArgs(args);
-
-            // Verify env is NOT present on non-Windows platforms
-            bool hasEnv = unityMcp.TryGetNode("env", out _);
-            Assert.IsFalse(hasEnv, "Non-Windows config should not contain env table");
-        }
-
-        [Test]
-        public void UpsertCodexServerBlock_OnWindows_IncludesSystemRootEnv()
-        {
-            // This test verifies the fix for https://github.com/CoplayDev/unity-mcp/issues/315
-            // Ensures that upsert operations also include Windows-specific env configuration in stdio mode
-
-            // Force stdio mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
-
-            // Mock Windows platform
-            MCPServiceLocator.Register<IPlatformService>(new MockPlatformService(isWindows: true, systemRoot: "C:\\Windows"));
-
-            string existingToml = string.Join("\n", new[]
-            {
-                "[other_section]",
-                "key = \"value\""
-            });
-
-            string uvPath = "C:\\path\\to\\uv.exe";
-
-            string result = CodexConfigHelper.UpsertCodexServerBlock(existingToml, uvPath);
-
-            Assert.IsNotNull(result, "UpsertCodexServerBlock should return a valid TOML string");
-
-            // Parse the generated TOML to validate structure
-            TomlTable parsed;
-            using (var reader = new StringReader(result))
-            {
-                parsed = TOML.Parse(reader);
-            }
-
-            // Verify existing sections are preserved
-            Assert.IsTrue(parsed.TryGetNode("other_section", out _), "TOML should preserve existing sections");
-
-            // Verify mcp_servers structure
-            Assert.IsTrue(parsed.TryGetNode("mcp_servers", out var mcpServersNode), "TOML should contain mcp_servers");
-            Assert.IsInstanceOf<TomlTable>(mcpServersNode, "mcp_servers should be a table");
-
-            var mcpServers = mcpServersNode as TomlTable;
-            Assert.IsTrue(mcpServers.TryGetNode("unityMCP", out var unityMcpNode), "mcp_servers should contain unityMCP");
-            Assert.IsInstanceOf<TomlTable>(unityMcpNode, "unityMCP should be a table");
-
-            var unityMcp = unityMcpNode as TomlTable;
-            Assert.IsTrue(unityMcp.TryGetNode("command", out var commandNode), "unityMCP should contain command");
-            Assert.IsTrue(unityMcp.TryGetNode("args", out var argsNode), "unityMCP should contain args");
-
-            // Verify command contains uvx
-            var command = (commandNode as TomlString).Value;
-            Assert.IsTrue(command.Contains("uvx"), "Command should contain uvx");
-
-            // Verify args contains the proper uvx command structure
-            var args = argsNode as TomlArray;
-            AssertValidUvxArgs(args);
-
-            // Verify env.SystemRoot is present on Windows
-            bool hasEnv = unityMcp.TryGetNode("env", out var envNode);
-            Assert.IsTrue(hasEnv, "Windows config should contain env table");
-            Assert.IsInstanceOf<TomlTable>(envNode, "env should be a table");
-
-            var env = envNode as TomlTable;
-            Assert.IsTrue(env.TryGetNode("SystemRoot", out var systemRootNode), "env should contain SystemRoot");
-            Assert.IsInstanceOf<TomlString>(systemRootNode, "SystemRoot should be a string");
-
-            var systemRoot = (systemRootNode as TomlString).Value;
-            Assert.AreEqual("C:\\Windows", systemRoot, "SystemRoot should be C:\\Windows");
-        }
-
-        [Test]
-        public void UpsertCodexServerBlock_OnNonWindows_ExcludesEnv()
-        {
-            // This test verifies that upsert operations on non-Windows platforms don't include env configuration in stdio mode
-
-            // Force stdio mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
-
-            // Mock non-Windows platform (e.g., macOS/Linux)
-            MCPServiceLocator.Register<IPlatformService>(new MockPlatformService(isWindows: false));
-
-            string existingToml = string.Join("\n", new[]
-            {
-                "[other_section]",
-                "key = \"value\""
-            });
-
-            string uvPath = "/usr/local/bin/uv";
-
-            string result = CodexConfigHelper.UpsertCodexServerBlock(existingToml, uvPath);
-
-            Assert.IsNotNull(result, "UpsertCodexServerBlock should return a valid TOML string");
-
-            // Parse the generated TOML to validate structure
-            TomlTable parsed;
-            using (var reader = new StringReader(result))
-            {
-                parsed = TOML.Parse(reader);
-            }
-
-            // Verify existing sections are preserved
-            Assert.IsTrue(parsed.TryGetNode("other_section", out _), "TOML should preserve existing sections");
-
-            // Verify mcp_servers structure
-            Assert.IsTrue(parsed.TryGetNode("mcp_servers", out var mcpServersNode), "TOML should contain mcp_servers");
-            Assert.IsInstanceOf<TomlTable>(mcpServersNode, "mcp_servers should be a table");
-
-            var mcpServers = mcpServersNode as TomlTable;
-            Assert.IsTrue(mcpServers.TryGetNode("unityMCP", out var unityMcpNode), "mcp_servers should contain unityMCP");
-            Assert.IsInstanceOf<TomlTable>(unityMcpNode, "unityMCP should be a table");
-
-            var unityMcp = unityMcpNode as TomlTable;
-            Assert.IsTrue(unityMcp.TryGetNode("command", out var commandNode), "unityMCP should contain command");
-            Assert.IsTrue(unityMcp.TryGetNode("args", out var argsNode), "unityMCP should contain args");
-
-            // Verify command contains uvx
-            var command = (commandNode as TomlString).Value;
-            Assert.IsTrue(command.Contains("uvx"), "Command should contain uvx");
-
-            // Verify args contains the proper uvx command structure
-            var args = argsNode as TomlArray;
-            AssertValidUvxArgs(args);
-
-            // Verify env is NOT present on non-Windows platforms
-            bool hasEnv = unityMcp.TryGetNode("env", out _);
-            Assert.IsFalse(hasEnv, "Non-Windows config should not contain env table");
-        }
 
         [Test]
         public void BuildCodexServerBlock_HttpMode_GeneratesUrlField()
@@ -468,7 +201,6 @@ namespace MCPForUnityTests.Editor.Helpers
             // This test verifies HTTP transport mode generates url field instead of command/args
 
             // Force HTTP mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
 
             string uvPath = "C:\\Program Files\\uv\\uv.exe";
 
@@ -540,7 +272,6 @@ namespace MCPForUnityTests.Editor.Helpers
             // This test verifies HTTP mode upsert generates url field
 
             // Force HTTP mode
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
 
             string existingToml = string.Join("\n", new[]
             {

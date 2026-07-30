@@ -178,7 +178,7 @@ class TestManageUIActionRouting:
     def test_read_uses_non_mutation_path(self, monkeypatch):
         captured = {}
 
-        async def fake_send(_func, _instance, cmd, params, **kwargs):
+        async def fake_send(_instance, cmd, params, **kwargs):
             captured["cmd"] = cmd
             captured["params"] = params
             return {"success": True, "data": {"contents": "test"}}
@@ -262,7 +262,7 @@ class TestManageUIActionRouting:
     def test_get_visual_tree_params(self, monkeypatch):
         captured = {}
 
-        async def fake_send(_func, _instance, _cmd, params, **kwargs):
+        async def fake_send(_instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "data": {"tree": {}}}
 
@@ -283,7 +283,7 @@ class TestManageUIActionRouting:
     def test_ping_uses_non_mutation_path(self, monkeypatch):
         captured = {}
 
-        async def fake_send(_func, _instance, _cmd, params, **kwargs):
+        async def fake_send(_instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "pong"}
 
@@ -304,7 +304,7 @@ class TestManageUINoneRemoval:
     def test_none_params_excluded(self, monkeypatch):
         captured = {}
 
-        async def fake_send(_func, _instance, _cmd, params, **kwargs):
+        async def fake_send(_instance, _cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "data": {}}
 

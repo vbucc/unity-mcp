@@ -41,45 +41,15 @@ uvx --from mcpforunityserver mcp-for-unity --transport http --http-url http://lo
 }
 ```
 
-**MCP Client Configuration (stdio):**
-
-```json
-{
-  "mcpServers": {
-    "UnityMCP": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "mcpforunityserver",
-        "mcp-for-unity",
-        "--transport",
-        "stdio"
-      ]
-    }
-  }
-}
-```
-
 ### Option 2: From GitHub Source
 
 Use this to run the latest released version from the repository. Change the version to `main` to run the latest unreleased changes from the repository.
 
-```json
-{
-  "mcpServers": {
-    "UnityMCP": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/CoplayDev/unity-mcp@v10.1.0-fork.1#subdirectory=Server",
-        "mcp-for-unity",
-        "--transport",
-        "stdio"
-      ]
-    }
-  }
-}
+```bash
+uvx --from "git+https://github.com/CoplayDev/unity-mcp@v10.1.0-fork.1#subdirectory=Server" mcp-for-unity
 ```
+
+Then point your MCP client at `http://localhost:8080/mcp`, as in Option 1.
 
 ### Option 3: Docker
 
@@ -108,7 +78,7 @@ git clone https://github.com/CoplayDev/unity-mcp.git
 cd unity-mcp/Server
 
 # Run with uv
-uv run src/main.py --transport stdio
+uv run src/main.py
 ```
 
 ---
@@ -121,7 +91,7 @@ The server connects to Unity Editor automatically when both are running. Most us
 
 These options apply to the `mcp-for-unity` command (whether run via `uvx`, Docker, or `python src/main.py`).
 
-- `--transport {stdio,http}` - Transport protocol (default: `stdio`)
+- `--transport http` - Transport protocol. HTTP is the only transport; the flag is accepted so client configs written by older packages keep working.
 - `--http-url URL` - Base URL used to derive host/port defaults (default: `http://localhost:8080`)
 - `--http-host HOST` - Override HTTP bind host (overrides URL host)
 - `--http-port PORT` - Override HTTP bind port (overrides URL port)
@@ -142,7 +112,6 @@ These options apply to the `mcp-for-unity` command (whether run via `uvx`, Docke
 
 ### Environment variables
 
-- `UNITY_MCP_TRANSPORT` - Transport protocol: `stdio` or `http`
 - `UNITY_MCP_HTTP_URL` - HTTP server URL (default: `http://localhost:8080`)
 - `UNITY_MCP_HTTP_HOST` - HTTP bind host (overrides URL host)
 - `UNITY_MCP_HTTP_PORT` - HTTP bind port (overrides URL port)
@@ -169,16 +138,10 @@ Telemetry:
 
 ### Examples
 
-**Stdio (default):**
+**HTTP (local, the default):**
 
 ```bash
-uvx --from mcpforunityserver mcp-for-unity --transport stdio
-```
-
-**HTTP (local):**
-
-```bash
-uvx --from mcpforunityserver mcp-for-unity --transport http --http-host 127.0.0.1 --http-port 8080
+uvx --from mcpforunityserver mcp-for-unity --http-host 127.0.0.1 --http-port 8080
 ```
 
 **HTTP (remote-hosted with API key auth):**
@@ -196,7 +159,7 @@ uvx --from mcpforunityserver mcp-for-unity \
 **Disable telemetry:**
 
 ```bash
-DISABLE_TELEMETRY=1 uvx --from mcpforunityserver mcp-for-unity --transport stdio
+DISABLE_TELEMETRY=1 uvx --from mcpforunityserver mcp-for-unity
 ```
 
 ---

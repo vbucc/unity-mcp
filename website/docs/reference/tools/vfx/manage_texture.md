@@ -18,7 +18,7 @@ Procedural texture generation for Unity. Creates textures with solid fills, patt
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `Literal['create', 'modify', 'delete', 'create_sprite', 'apply_pattern', 'apply_gradient', 'apply_noise', 'set_import_settings']` | yes | Action to perform. |
+| `action` | `Literal['create', 'modify', 'create_sprite', 'apply_pattern', 'apply_gradient', 'apply_noise', 'set_import_settings']` | yes | Action to perform. |
 | `path` | `str \| None` | — | Output texture path (e.g., 'Assets/Textures/MyTexture.png') |
 | `width` | `int \| None` | — | Texture width in pixels (default: 64) |
 | `height` | `int \| None` | — | Texture height in pixels (default: 64) |

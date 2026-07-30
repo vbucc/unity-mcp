@@ -1,6 +1,6 @@
 import pytest
 
-from .test_helpers import DummyContext, DummyMCP, setup_script_tools
+from .test_helpers import DummyContext, DummyMCP, setup_script_tools, patch_script_send
 
 
 @pytest.mark.asyncio
@@ -9,18 +9,11 @@ async def test_normalizes_lsp_and_index_ranges(monkeypatch):
     apply = tools["apply_text_edits"]
     calls = []
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         calls.append(params)
         return {"success": True}
 
-    # Patch the send_command_with_retry function at the module level where it's imported
-    import transport.legacy.unity_connection
-    monkeypatch.setattr(
-        transport.legacy.unity_connection,
-        "async_send_command_with_retry",
-        fake_send,
-    )
-    # No need to patch tools.manage_script; it calls unity_connection.send_command_with_retry
+    patch_script_send(monkeypatch, fake_send)
 
     # LSP-style
     edits = [{
@@ -42,18 +35,15 @@ async def test_normalizes_lsp_and_index_ranges(monkeypatch):
     edits = [{"range": [0, 0], "text": "// idx\n"}]
     # fake read to provide contents length
 
-    async def fake_read(cmd, params, **kwargs):
+    async def fake_read(_unity_instance, cmd, params, **kwargs):
         if params.get("action") == "read":
             return {"success": True, "data": {"contents": "hello\n"}}
         calls.append(params)
         return {"success": True}
 
-    # Override unity_connection for this read normalization case
-    monkeypatch.setattr(
-        transport.legacy.unity_connection,
-        "async_send_command_with_retry",
-        fake_read,
-    )
+    patch_script_send(monkeypatch, fake_read)
+    import transport.unity_transport as _ut
+    monkeypatch.setattr(_ut, "send_with_unity_instance", fake_read)
     await apply(
         DummyContext(),
         uri="mcpforunity://path/Assets/Scripts/F.cs",
@@ -69,19 +59,12 @@ async def test_noop_evidence_shape(monkeypatch):
     apply = tools["apply_text_edits"]
     # Route response from Unity indicating no-op
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         return {
             "success": True,
             "data": {"no_op": True, "evidence": {"reason": "identical_content"}},
         }
-    # Patch the send_command_with_retry function at the module level where it's imported
-    import transport.legacy.unity_connection
-    monkeypatch.setattr(
-        transport.legacy.unity_connection,
-        "async_send_command_with_retry",
-        fake_send,
-    )
-    # No need to patch tools.manage_script; it calls unity_connection.send_command_with_retry
+    patch_script_send(monkeypatch, fake_send)
 
     resp = await apply(
         DummyContext(),
@@ -102,7 +85,7 @@ async def test_atomic_multi_span_and_relaxed(monkeypatch):
     # Fake send for read and write; verify atomic applyMode and validate=relaxed passes through
     sent = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         if params.get("action") == "read":
             return {
                 "success": True,
@@ -111,13 +94,7 @@ async def test_atomic_multi_span_and_relaxed(monkeypatch):
         sent.setdefault("calls", []).append(params)
         return {"success": True}
 
-    # Patch the send_command_with_retry function at the module level where it's imported
-    import transport.legacy.unity_connection
-    monkeypatch.setattr(
-        transport.legacy.unity_connection,
-        "async_send_command_with_retry",
-        fake_send,
-    )
+    patch_script_send(monkeypatch, fake_send)
 
     edits = [
         {"startLine": 2, "startCol": 14, "endLine": 2, "endCol": 15, "newText": "3"},

@@ -23,7 +23,9 @@
       "args": [
         "--from",
         "mcpforunityserver",
-        "mcp-for-unity"
+        "mcp-for-unity",
+        "--transport",
+        "http"
       ],
       "env": {}
     }

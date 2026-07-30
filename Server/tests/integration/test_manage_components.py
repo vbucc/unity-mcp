@@ -14,7 +14,7 @@ async def test_manage_components_add_single(monkeypatch):
     """Test adding a single component."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["cmd"] = cmd
         captured["params"] = params
         return {
@@ -26,7 +26,7 @@ async def test_manage_components_add_single(monkeypatch):
 
     monkeypatch.setattr(
         manage_comp_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -49,13 +49,13 @@ async def test_manage_components_remove(monkeypatch):
     """Test removing a component."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"instanceID": 12345, "name": "Player"}}
 
     monkeypatch.setattr(
         manage_comp_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -76,13 +76,13 @@ async def test_manage_components_set_property_single(monkeypatch):
     """Test setting a single component property."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"instanceID": 12345}}
 
     monkeypatch.setattr(
         manage_comp_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -106,13 +106,13 @@ async def test_manage_components_set_property_multiple(monkeypatch):
     """Test setting multiple component properties via properties dict."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"instanceID": 12345}}
 
     monkeypatch.setattr(
         manage_comp_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -134,13 +134,13 @@ async def test_manage_components_set_property_json_string(monkeypatch):
     """Test setting component properties with JSON string input."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"instanceID": 12345}}
 
     monkeypatch.setattr(
         manage_comp_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -161,7 +161,7 @@ async def test_manage_components_add_with_properties(monkeypatch):
     """Test adding a component with initial properties."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -170,7 +170,7 @@ async def test_manage_components_add_with_properties(monkeypatch):
 
     monkeypatch.setattr(
         manage_comp_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -191,13 +191,13 @@ async def test_manage_components_search_method_passthrough(monkeypatch):
     """Test that search_method is correctly passed through."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {}}
 
     monkeypatch.setattr(
         manage_comp_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -218,13 +218,13 @@ async def test_manage_components_target_by_id(monkeypatch):
     """Test targeting by instance ID."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {}}
 
     monkeypatch.setattr(
         manage_comp_mod,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 

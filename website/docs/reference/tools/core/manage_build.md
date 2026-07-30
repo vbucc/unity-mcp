@@ -1,7 +1,7 @@
 ---
 title: manage_build
 sidebar_label: manage_build
-description: "Manage Unity player builds — trigger builds, switch platforms, configure settings, manage build scenes and profiles, run batch builds across platforms."
+description: "Manage Unity player builds — trigger builds, switch platforms, configure settings, manage build scenes and profiles, run batch builds across platforms. settings accepts any PlayerSettings property (e.g. bakeCollisionMeshes, allowUnsafeCo…"
 ---
 
 # `manage_build`
@@ -12,13 +12,13 @@ description: "Manage Unity player builds — trigger builds, switch platforms, c
 
 ## Description
 
-Manage Unity player builds — trigger builds, switch platforms, configure settings, manage build scenes and profiles, run batch builds across platforms. Actions: build, status, platform, settings, scenes, profiles, batch, cancel.
+Manage Unity player builds — trigger builds, switch platforms, configure settings, manage build scenes and profiles, run batch builds across platforms. settings accepts any PlayerSettings property (e.g. bakeCollisionMeshes, allowUnsafeCode), not just the well-known shortcuts. Use list_settings to discover all available properties. Actions: build, status, platform, settings, list_settings, scenes, profiles, batch, cancel.
 
 ## Parameters
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `str` | yes | Action: build, status, platform, settings, scenes, profiles, batch, cancel |
+| `action` | `Literal['build', 'status', 'platform', 'settings', 'list_settings', 'scenes', 'profiles', 'batch', 'cancel']` | yes | Action: build, status, platform, settings, list_settings, scenes, profiles, batch, cancel |
 | `target` | `str \| None` | — | Build target: windows64, osx, linux64, android, ios, webgl, uwp, tvos, visionos |
 | `output_path` | `str \| None` | — | Output path for the build |
 | `scenes` | `str \| None` | — | JSON array of scene paths, or comma-separated paths |
@@ -27,7 +27,7 @@ Manage Unity player builds — trigger builds, switch platforms, configure setti
 | `subtarget` | `str \| None` | — | Build subtarget: player or server |
 | `scripting_backend` | `str \| None` | — | Scripting backend: mono or il2cpp (persistent change) |
 | `profile` | `str \| None` | — | Build Profile asset path (Unity 6+ only) |
-| `property` | `str \| None` | — | Settings property: product_name, company_name, version, bundle_id, scripting_backend, defines, architecture |
+| `property` | `str \| None` | — | Settings property name. Well-known shortcuts: product_name, company_name, version, bundle_id, scripting_backend, defines, architecture. Any PlayerSettings property also works (e.g. bakeCollisionMeshes, allowUnsafeCode). Use action='list_settings' to discover all. |
 | `value` | `str \| None` | — | Value to set for the property (omit to read) |
 | `activate` | `str \| None` | — | Activate a build profile (true/false) |
 | `targets` | `str \| None` | — | JSON array of targets for batch build |

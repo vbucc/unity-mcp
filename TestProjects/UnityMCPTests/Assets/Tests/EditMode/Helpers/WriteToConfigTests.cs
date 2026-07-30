@@ -15,7 +15,6 @@ namespace MCPForUnityTests.Editor.Helpers
 {
     public class WriteToConfigTests
     {
-        private const string UseHttpTransportPrefKey = EditorPrefKeys.UseHttpTransport;
         private const string HttpUrlPrefKey = EditorPrefKeys.HttpBaseUrl;
 
         private string _tempRoot;
@@ -23,8 +22,6 @@ namespace MCPForUnityTests.Editor.Helpers
         private string _serverSrcDir;
 
         // Save/restore original pref values (must happen BEFORE Assert.Ignore since TearDown still runs)
-        private bool _hadHttpTransport;
-        private bool _originalHttpTransport;
         private bool _hadHttpUrl;
         private string _originalHttpUrl;
 
@@ -32,8 +29,6 @@ namespace MCPForUnityTests.Editor.Helpers
         public void SetUp()
         {
             // Save original pref values FIRST - TearDown runs even when test is ignored!
-            _hadHttpTransport = EditorPrefs.HasKey(UseHttpTransportPrefKey);
-            _originalHttpTransport = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
             _hadHttpUrl = EditorPrefs.HasKey(HttpUrlPrefKey);
             _originalHttpUrl = EditorPrefs.GetString(HttpUrlPrefKey, "");
 
@@ -64,7 +59,6 @@ namespace MCPForUnityTests.Editor.Helpers
             // Disable auto-registration to avoid hitting user configs during tests
             EditorPrefs.SetBool(EditorPrefKeys.AutoRegisterEnabled, false);
             // Force HTTP transport defaults so expectations match current behavior
-            EditorPrefs.SetBool(UseHttpTransportPrefKey, true);
             EditorPrefs.SetString(HttpUrlPrefKey, "http://localhost:8080");
             EditorConfigCache.Instance.Refresh();
         }
@@ -78,10 +72,6 @@ namespace MCPForUnityTests.Editor.Helpers
             EditorPrefs.DeleteKey(EditorPrefKeys.AutoRegisterEnabled);
 
             // Restore original pref values (don't delete if user had them set!)
-            if (_hadHttpTransport)
-                EditorPrefs.SetBool(UseHttpTransportPrefKey, _originalHttpTransport);
-            else
-                EditorPrefs.DeleteKey(UseHttpTransportPrefKey);
 
             if (_hadHttpUrl)
                 EditorPrefs.SetString(HttpUrlPrefKey, _originalHttpUrl);
@@ -191,39 +181,6 @@ namespace MCPForUnityTests.Editor.Helpers
             AssertTransportConfiguration(unity, client);
         }
 
-        [Test]
-        public void ClaudeDesktop_UsesAbsoluteUvPath_WhenOverrideProvided()
-        {
-            var configPath = Path.Combine(_tempRoot, "claude-desktop.json");
-            WriteInitialConfig(configPath, isVSCode: false, command: "uvx", directory: "/old/path");
-
-            WithTransportPreference(false, () =>
-            {
-                MCPServiceLocator.Paths.SetUvxPathOverride(_fakeUvPath);
-                try
-                {
-                    var client = new McpClient
-                    {
-                        name = "Claude Desktop",
-                        SupportsHttpTransport = false,
-                        StripEnvWhenNotRequired = true
-                    };
-
-                    InvokeWriteToConfig(configPath, client);
-
-                    var root = JObject.Parse(File.ReadAllText(configPath));
-                    var unity = (JObject)root.SelectToken("mcpServers.unityMCP");
-                    Assert.NotNull(unity, "Expected mcpServers.unityMCP node");
-                    Assert.AreEqual(_fakeUvPath, (string)unity["command"], "Claude Desktop should use absolute uvx path");
-                    Assert.IsNull(unity["env"], "Claude Desktop config should not include env block when not required");
-                    AssertTransportConfiguration(unity, client);
-                }
-                finally
-                {
-                    MCPServiceLocator.Paths.ClearUvxPathOverride();
-                }
-            });
-        }
 
         [Test]
         public void PreservesExistingEnvAndDisabled_ForKiro()
@@ -300,45 +257,39 @@ namespace MCPForUnityTests.Editor.Helpers
         }
 
         [Test]
-        public void UsesStdioTransport_ForNonVSCodeClients_WhenPreferenceDisabled()
+        public void RewritesLegacyStdioConfig_ForNonVSCodeClients()
         {
             var configPath = Path.Combine(_tempRoot, "stdio-non-vscode.json");
             WriteInitialConfig(configPath, isVSCode: false, command: _fakeUvPath, directory: "/old/path");
 
-            WithTransportPreference(false, () =>
+            var client = new McpClient
             {
-                var client = new McpClient
-                {
-                    name = "Windsurf",
-                    HttpUrlProperty = "serverUrl",
-                    DefaultUnityFields = { { "disabled", false } },
-                    StripEnvWhenNotRequired = true
-                };
-                InvokeWriteToConfig(configPath, client);
+                name = "Windsurf",
+                HttpUrlProperty = "serverUrl",
+                DefaultUnityFields = { { "disabled", false } },
+                StripEnvWhenNotRequired = true
+            };
+            InvokeWriteToConfig(configPath, client);
 
-                var root = JObject.Parse(File.ReadAllText(configPath));
-                var unity = (JObject)root.SelectToken("mcpServers.unityMCP");
-                Assert.NotNull(unity, "Expected mcpServers.unityMCP node");
-                AssertTransportConfiguration(unity, client);
-            });
+            var root = JObject.Parse(File.ReadAllText(configPath));
+            var unity = (JObject)root.SelectToken("mcpServers.unityMCP");
+            Assert.NotNull(unity, "Expected mcpServers.unityMCP node");
+            AssertTransportConfiguration(unity, client);
         }
 
         [Test]
-        public void UsesStdioTransport_ForVSCode_WhenPreferenceDisabled()
+        public void RewritesLegacyStdioConfig_ForVSCode()
         {
             var configPath = Path.Combine(_tempRoot, "stdio-vscode.json");
             WriteInitialConfig(configPath, isVSCode: true, command: _fakeUvPath, directory: "/old/path");
 
-            WithTransportPreference(false, () =>
-            {
-                var client = new McpClient { name = "VSCode", IsVsCodeLayout = true };
-                InvokeWriteToConfig(configPath, client);
+            var client = new McpClient { name = "VSCode", IsVsCodeLayout = true };
+            InvokeWriteToConfig(configPath, client);
 
-                var root = JObject.Parse(File.ReadAllText(configPath));
-                var unity = (JObject)root.SelectToken("servers.unityMCP");
-                Assert.NotNull(unity, "Expected servers.unityMCP node");
-                AssertTransportConfiguration(unity, client);
-            });
+            var root = JObject.Parse(File.ReadAllText(configPath));
+            var unity = (JObject)root.SelectToken("servers.unityMCP");
+            Assert.NotNull(unity, "Expected servers.unityMCP node");
+            AssertTransportConfiguration(unity, client);
         }
 
         // --- Helpers ---
@@ -407,69 +358,28 @@ namespace MCPForUnityTests.Editor.Helpers
 
         private static void AssertTransportConfiguration(JObject unity, McpClient client)
         {
-            bool useHttp = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
             bool isWindsurf = string.Equals(client.HttpUrlProperty, "serverUrl", StringComparison.OrdinalIgnoreCase);
 
-            if (useHttp)
+            string expectedUrl = HttpEndpointUtility.GetMcpRpcUrl();
+            if (isWindsurf)
             {
-                string expectedUrl = HttpEndpointUtility.GetMcpRpcUrl();
-                if (isWindsurf)
-                {
-                    Assert.AreEqual(expectedUrl, (string)unity["serverUrl"],
-                        "Windsurf should advertise HTTP using serverUrl");
-                    Assert.IsNull(unity["url"], "Windsurf configs should not use the url property");
-                }
-                else
-                {
-                    Assert.AreEqual(expectedUrl, (string)unity["url"],
-                        "HTTP transport should set url to the MCP endpoint");
-                    Assert.IsNull(unity["serverUrl"], "serverUrl should be reserved for Windsurf");
-                }
-                Assert.IsNull(unity["command"], "HTTP transport should remove command");
-                Assert.IsNull(unity["args"], "HTTP transport should remove args");
-
-                // "type" is now included for all clients (standard MCP protocol field).
-                Assert.AreEqual("http", (string)unity["type"],
-                    "All entries should advertise HTTP transport type");
+                Assert.AreEqual(expectedUrl, (string)unity["serverUrl"],
+                    "Windsurf should advertise HTTP using serverUrl");
+                Assert.IsNull(unity["url"], "Windsurf configs should not use the url property");
             }
             else
             {
-                Assert.IsNull(unity["url"], "stdio transport should not include a url");
-                Assert.IsNull(unity["serverUrl"], "stdio transport should not include a serverUrl");
-
-                string command = (string)unity["command"];
-                Assert.False(string.IsNullOrEmpty(command), "stdio transport should include a command");
-
-                var args = (unity["args"] as JArray)?.ToObject<string[]>();
-                Assert.NotNull(args, "stdio transport should include args array");
-
-                int transportIndex = Array.IndexOf(args, "--transport");
-                Assert.GreaterOrEqual(transportIndex, 0, "args should include --transport flag");
-                Assert.Less(transportIndex + 1, args.Length,
-                    "--transport flag should be followed by a mode value");
-                Assert.AreEqual("stdio", args[transportIndex + 1],
-                    "--transport should be followed by stdio mode");
-
-                // "type" is now included for all clients (standard MCP protocol field).
-                Assert.AreEqual("stdio", (string)unity["type"],
-                    "All entries should advertise stdio transport type");
+                Assert.AreEqual(expectedUrl, (string)unity["url"],
+                    "HTTP transport should set url to the MCP endpoint");
+                Assert.IsNull(unity["serverUrl"], "serverUrl should be reserved for Windsurf");
             }
+            Assert.IsNull(unity["command"], "HTTP transport should remove command");
+            Assert.IsNull(unity["args"], "HTTP transport should remove args");
+
+            // "type" is now included for all clients (standard MCP protocol field).
+            Assert.AreEqual("http", (string)unity["type"],
+                "All entries should advertise HTTP transport type");
         }
 
-        private static void WithTransportPreference(bool useHttp, Action action)
-        {
-            bool original = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
-            EditorPrefs.SetBool(UseHttpTransportPrefKey, useHttp);
-            EditorConfigCache.Instance.Refresh();
-            try
-            {
-                action();
-            }
-            finally
-            {
-                EditorPrefs.SetBool(UseHttpTransportPrefKey, original);
-                EditorConfigCache.Instance.Refresh();
-            }
-        }
     }
 }

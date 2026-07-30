@@ -13,14 +13,19 @@ using UnityEngine;
 namespace MCPForUnity.Editor.Migrations
 {
     /// <summary>
-    /// Keeps stdio MCP clients in sync with the current package version by rewriting their configs when the package updates.
+    /// Rewrites MCP client configs when the package version changes.
+    ///
+    /// Two jobs: keep configs pointing at the current package version, and migrate
+    /// clients still carrying a stdio registration (a <c>command</c>/<c>args</c> entry
+    /// with no <c>url</c>) from before stdio was removed. Without this, upgrading users
+    /// keep a config that launches a transport the server no longer speaks.
     /// </summary>
     [InitializeOnLoad]
-    internal static class StdIoVersionMigration
+    internal static class LegacyClientConfigMigration
     {
-        private const string LastUpgradeKey = EditorPrefKeys.LastStdIoUpgradeVersion;
+        private const string LastUpgradeKey = EditorPrefKeys.LastClientConfigMigrationVersion;
 
-        static StdIoVersionMigration()
+        static LegacyClientConfigMigration()
         {
             if (Application.isBatchMode)
                 return;
@@ -58,8 +63,8 @@ namespace MCPForUnity.Editor.Migrations
                         continue;
 
                     // Handle CLI-based configurators (e.g., Claude Code CLI)
-                    // CheckStatus with attemptAutoRewrite=true will auto-reregister if version mismatch
-                    if (configurator is ClaudeCliMcpConfigurator cliConfigurator)
+                    // CheckStatus with attemptAutoRewrite=true re-registers a stale entry
+                    if (configurator is ClaudeCliMcpConfigurator)
                     {
                         var previousStatus = configurator.Status;
                         configurator.CheckStatus(attemptAutoRewrite: true);
@@ -71,13 +76,7 @@ namespace MCPForUnity.Editor.Migrations
                     }
 
                     // Handle JSON file-based configurators
-                    if (!ConfigUsesStdIo(configurator.Client))
-                        continue;
-
-                    // Skip clients that don't support the current transport setting —
-                    // Configure() would throw (e.g., Claude Desktop when HTTP is enabled).
-                    bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-                    if (useHttp && !configurator.Client.SupportsHttpTransport)
+                    if (!JsonConfigIsLegacyStdio(configurator.Client))
                         continue;
 
                     MCPServiceLocator.Client.ConfigureClient(configurator);
@@ -86,7 +85,7 @@ namespace MCPForUnity.Editor.Migrations
                 catch (Exception ex)
                 {
                     hadFailures = true;
-                    McpLog.Warn($"Failed to refresh stdio config for {configurator.DisplayName}: {ex.Message}");
+                    McpLog.Warn($"Failed to refresh MCP config for {configurator.DisplayName}: {ex.Message}");
                 }
             }
 
@@ -99,7 +98,7 @@ namespace MCPForUnity.Editor.Migrations
 
             if (hadFailures)
             {
-                McpLog.Warn("Stdio MCP upgrade encountered errors; will retry next session.");
+                McpLog.Warn("MCP client config upgrade encountered errors; will retry next session.");
                 return;
             }
 
@@ -109,15 +108,14 @@ namespace MCPForUnity.Editor.Migrations
             }
             catch { }
 
-            McpLog.Info($"Updated stdio MCP configs to package version {currentVersion}.");
+            McpLog.Info($"Updated MCP client configs to package version {currentVersion}.");
         }
 
-        private static bool ConfigUsesStdIo(McpClient client)
-        {
-            return JsonConfigUsesStdIo(client);
-        }
-
-        private static bool JsonConfigUsesStdIo(McpClient client)
+        /// <summary>
+        /// True when the client's JSON config still carries a stdio-style entry
+        /// (a <c>command</c> field) instead of the HTTP <c>url</c>.
+        /// </summary>
+        private static bool JsonConfigIsLegacyStdio(McpClient client)
         {
             string configPath = McpConfigurationHelper.GetClientConfigPath(client);
             if (string.IsNullOrEmpty(configPath) || !File.Exists(configPath))

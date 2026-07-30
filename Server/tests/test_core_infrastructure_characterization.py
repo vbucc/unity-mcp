@@ -658,16 +658,8 @@ class TestServerConfigDefaults:
         """Verify ServerConfig has expected default values."""
         config = ServerConfig()
 
-        assert config.unity_host == "127.0.0.1"
-        assert config.unity_port == 6400
-        assert config.mcp_port == 6500
-        assert config.connection_timeout == 30.0
-        assert config.buffer_size == 16 * 1024 * 1024
-        assert config.require_framing is True
-        assert config.handshake_timeout == 1.0
-        assert config.framed_receive_timeout == 2.0
-        assert config.max_heartbeat_frames == 16
-        assert config.heartbeat_timeout == 2.0
+        assert config.http_remote_hosted is False
+        assert config.api_key_cache_ttl == 300.0
 
     def test_config_logging_defaults(self):
         """Verify logging configuration defaults."""
@@ -683,11 +675,7 @@ class TestServerConfigDefaults:
         """Verify server configuration defaults."""
         config = ServerConfig()
 
-        assert config.max_retries == 5
-        assert config.retry_delay == 0.25
-        assert config.reload_retry_ms == 250
-        assert config.reload_max_retries == 40
-        assert config.port_registry_ttl == 5.0
+        assert config.telemetry_enabled is True
 
     def test_config_telemetry_defaults(self):
         """Verify telemetry configuration defaults."""

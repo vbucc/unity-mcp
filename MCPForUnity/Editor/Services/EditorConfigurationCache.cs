@@ -10,7 +10,7 @@ namespace MCPForUnity.Editor.Services
     ///
     /// Usage:
     ///   var config = EditorConfigurationCache.Instance;
-    ///   if (config.UseHttpTransport) { ... }
+    ///   if (config.DebugLogs) { ... }
     ///   config.OnConfigurationChanged += (key) => { /* refresh UI */ };
     /// </summary>
     public class EditorConfigurationCache
@@ -46,7 +46,6 @@ namespace MCPForUnity.Editor.Services
         public event Action<string> OnConfigurationChanged;
 
         // Cached values - most frequently read
-        private bool _useHttpTransport;
         private bool _debugLogs;
         private bool _devModeForceServerRefresh;
         private string _uvxPathOverride;
@@ -55,13 +54,6 @@ namespace MCPForUnity.Editor.Services
         private string _httpRemoteBaseUrl;
         private string _claudeCliPathOverride;
         private string _httpTransportScope;
-        private int _unitySocketPort;
-
-        /// <summary>
-        /// Whether to use HTTP transport (true) or Stdio transport (false).
-        /// Default: true
-        /// </summary>
-        public bool UseHttpTransport => _useHttpTransport;
 
         /// <summary>
         /// Whether debug logging is enabled.
@@ -111,12 +103,6 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public string HttpTransportScope => _httpTransportScope;
 
-        /// <summary>
-        /// Unity socket port for Stdio transport.
-        /// Default: 0 (auto-assign)
-        /// </summary>
-        public int UnitySocketPort => _unitySocketPort;
-
         private EditorConfigurationCache()
         {
             Refresh();
@@ -128,7 +114,6 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public void Refresh()
         {
-            _useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             _devModeForceServerRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             _uvxPathOverride = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
@@ -137,20 +122,6 @@ namespace MCPForUnity.Editor.Services
             _httpRemoteBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
             _claudeCliPathOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
             _httpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
-            _unitySocketPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
-        }
-
-        /// <summary>
-        /// Set UseHttpTransport and update cache + EditorPrefs atomically.
-        /// </summary>
-        public void SetUseHttpTransport(bool value)
-        {
-            if (_useHttpTransport != value)
-            {
-                _useHttpTransport = value;
-                EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, value);
-                OnConfigurationChanged?.Invoke(nameof(UseHttpTransport));
-            }
         }
 
         /// <summary>
@@ -264,19 +235,6 @@ namespace MCPForUnity.Editor.Services
         }
 
         /// <summary>
-        /// Set UnitySocketPort and update cache + EditorPrefs atomically.
-        /// </summary>
-        public void SetUnitySocketPort(int value)
-        {
-            if (_unitySocketPort != value)
-            {
-                _unitySocketPort = value;
-                EditorPrefs.SetInt(EditorPrefKeys.UnitySocketPort, value);
-                OnConfigurationChanged?.Invoke(nameof(UnitySocketPort));
-            }
-        }
-
-        /// <summary>
         /// Force refresh of a single cached value from EditorPrefs.
         /// Useful when external code modifies EditorPrefs directly.
         /// </summary>
@@ -284,9 +242,6 @@ namespace MCPForUnity.Editor.Services
         {
             switch (keyName)
             {
-                case nameof(UseHttpTransport):
-                    _useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-                    break;
                 case nameof(DebugLogs):
                     _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
                     break;
@@ -310,9 +265,6 @@ namespace MCPForUnity.Editor.Services
                     break;
                 case nameof(HttpTransportScope):
                     _httpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
-                    break;
-                case nameof(UnitySocketPort):
-                    _unitySocketPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
                     break;
             }
             OnConfigurationChanged?.Invoke(keyName);

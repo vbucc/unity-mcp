@@ -11,7 +11,6 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.utils import parse_json_payload, coerce_int, normalize_properties, normalize_color
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
@@ -102,7 +101,6 @@ async def manage_material(
 
     # Use centralized async retry helper with instance routing
     result = await send_with_unity_instance(
-        async_send_command_with_retry,
         unity_instance,
         "manage_material",
         params_dict,
