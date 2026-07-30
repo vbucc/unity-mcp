@@ -162,10 +162,8 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                if (!EditorConfigurationCache.Instance.UseHttpTransport) return true;
-
                 // Don't auto-start if bridge is already running.
-                if (MCPServiceLocator.TransportManager.IsRunning(TransportMode.Http)) return true;
+                if (MCPServiceLocator.TransportManager.IsRunning()) return true;
 
                 _ = AutoStartAsync();
                 return true;
@@ -188,8 +186,7 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 proceed = EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false)
-                    && EditorConfigurationCache.Instance.UseHttpTransport
-                    && !MCPServiceLocator.TransportManager.IsRunning(TransportMode.Http);
+                    && !MCPServiceLocator.TransportManager.IsRunning();
             }
             catch (Exception ex)
             {
@@ -302,8 +299,7 @@ namespace MCPForUnity.Editor.Services
             {
                 // Abort if user changed settings while we were waiting.
                 if (!EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false)) return;
-                if (!EditorConfigurationCache.Instance.UseHttpTransport) return;
-                if (MCPServiceLocator.TransportManager.IsRunning(TransportMode.Http)) return;
+                if (MCPServiceLocator.TransportManager.IsRunning()) return;
 
                 if (server.IsLocalHttpServerReachable())
                 {

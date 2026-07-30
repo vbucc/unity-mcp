@@ -6,7 +6,7 @@ description: "MCP for Unity tools in the scripting_ext group."
 
 # `scripting_ext` tools
 
-ScriptableObject management
+ScriptableObject create/modify — serialized property patching, GUID & path object references, arrays, dry-run validation
 
 - **[`execute_code`](./execute_code.md)** — Execute arbitrary C# code inside the Unity Editor.
-- **[`manage_scriptable_object`](./manage_scriptable_object.md)** — Creates and modifies ScriptableObject assets using Unity SerializedObject property paths.
+- **[`manage_scriptable_object`](./manage_scriptable_object.md)** — Creates and modifies ScriptableObject assets via serialized property patching.

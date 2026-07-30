@@ -12,7 +12,7 @@ description: "Controls and queries the Unity editor's state and settings."
 
 ## Description
 
-Controls and queries the Unity editor's state and settings. Read-only actions: telemetry_status, telemetry_ping. Modifying actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, deploy_package, restore_package, undo, redo. For prefab editing (open/save/close prefab stage), use manage_prefabs. deploy_package copies the configured MCPForUnity source folder into the project's installed package location (triggers recompile, no confirmation dialog). restore_package reverts to the pre-deployment backup. undo/redo perform Unity editor undo/redo and return the affected group name.
+Controls and queries the Unity editor's state and settings. Read-only actions: telemetry_status, telemetry_ping. Modifying actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, deploy_package, restore_package, undo, redo. For prefab editing (open/save/close prefab stage), use manage_prefabs. deploy_package copies the configured MCPForUnity source folder into the project's installed package location (triggers recompile, no confirmation dialog). restore_package reverts to the pre-deployment backup. undo/redo perform Unity editor undo/redo and return the affected group name. play accepts an optional 'scenario' (asset path or name) to boot a Unity Multiplayer Play Mode (MPPM) Play Mode Scenario; stop is wedge-safe when a scenario is active.
 
 ## Parameters
 
@@ -22,6 +22,7 @@ Controls and queries the Unity editor's state and settings. Read-only actions: t
 | `tool_name` | `str \| None` | — | Tool name when setting active tool |
 | `tag_name` | `str \| None` | — | Tag name when adding and removing tags |
 | `layer_name` | `str \| None` | — | Layer name when adding and removing layers |
+| `scenario` | `str \| None` | — | play: boot a Unity MPPM Play Mode Scenario by asset path or name (e.g. 'Single player (Offline)'); omit for normal play |
 
 ## Returns
 

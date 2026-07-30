@@ -10,7 +10,6 @@ Domains Covered:
 1. Version Management (update_versions.py)
 2. MCPB Bundle Generation (generate_mcpb.py)
 3. Asset Store Preparation (prepare_unity_asset_store_release.py)
-4. Stress Testing (stress_mcp.py, stress_editor_state.py)
 5. Release Workflows and Checklists
 6. Git Integration Patterns
 

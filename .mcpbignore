@@ -29,7 +29,6 @@ deploy-dev.bat
 restore-dev.bat
 
 # Test files at root
-test_unity_socket_framing.py
 mcp_source.py
 prune_tool_results.py
 

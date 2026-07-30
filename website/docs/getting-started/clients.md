@@ -14,7 +14,7 @@ MCP for Unity auto-configures every client the package detects on your machine. 
 
 | Client | Transport | Auto-config | Streaming reasoning | Free tier | Notes |
 |---|---|---|---|---|---|
-| **Claude Desktop** | stdio only | yes | yes | yes (rate-limited) | Easiest setup. Stdio is silently chosen even if HTTP is selected globally. |
+| **Claude Desktop** | HTTP | yes | yes | yes (rate-limited) | Easiest setup. |
 | **Claude Code** | HTTP | yes | yes | needs Anthropic plan | First-party. Strong with multi-tool workflows. |
 | **Cursor** | HTTP | yes | yes | partial | Requires an MCP toggle in Cursor's own settings after auto-config. |
 | **VS Code (Copilot)** | HTTP | yes | yes | with Copilot | Configures under `servers` (not `mcpServers`). |
@@ -24,12 +24,12 @@ MCP for Unity auto-configures every client the package detects on your machine. 
 | **Codex** | HTTP | yes | yes | with OpenAI | Auto-connects. |
 | **Qwen Code** | HTTP | yes | yes | yes | Auto-connects. |
 | **Gemini CLI** | HTTP | yes | yes | yes | Auto-connects. |
-| **OpenClaw** | HTTP / stdio | yes | yes | yes | Requires `openclaw-mcp-bridge` plugin enabled. Follows MCP for Unity's transport choice. |
+| **OpenClaw** | HTTP | yes | yes | yes | Requires `openclaw-mcp-bridge` plugin enabled. Follows MCP for Unity's transport scope. |
 | **Antigravity** | HTTP | yes | yes | varies | Requires an MCP toggle in Antigravity settings. |
 
 ## How to pick
 
-- **You want it to just work**: Claude Desktop. Stdio means no port conflicts and no firewall prompts.
+- **You want it to just work**: Claude Desktop. Point it at the local server and you're done.
 - **You're building a multi-agent or remote workflow**: anything HTTP. Multiple clients can share one Python server; see [Multi-Instance Routing](/guides/multi-instance).
 - **You're already in your IDE**: Cursor, VS Code Copilot, or Cline — keeps you in flow.
 - **You want a terminal**: Claude Code, Copilot CLI, Codex, Gemini CLI, or Qwen Code.

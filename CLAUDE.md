@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```text
 AI Assistant (Claude/Cursor)
-        ↓ MCP Protocol (stdio/HTTP)
+        ↓ MCP Protocol (HTTP)
 Python Server (Server/src/)
         ↓ WebSocket + HTTP
 Unity Editor Plugin (MCPForUnity/)
@@ -34,10 +34,13 @@ The Python server has three distinct layers. These are **not** auto-generated fr
 
 MCP tools call Unity via WebSocket (`send_with_unity_instance`). CLI commands call Unity via HTTP (`run_command`). Both route to the same C# `HandleCommand` methods.
 
-### Transport Modes
+### Transport
 
-- **Stdio**: Single-agent only. Separate Python process per client. Legacy TCP bridge to Unity. New connections stomp old ones.
-- **HTTP**: Multi-agent ready. Single shared Python server. WebSocket hub at `/hub/plugin`. Per-session instance routing is held in FastMCP's session-scoped state (key `mcpforunity.active_instance`), which keys off `ctx.session_id` — the `Mcp-Session-Id` header on HTTP, a per-subprocess UUID on stdio — so two MCP sessions can never share a selection (#1023). Auto-matches Unity instances to Claude sessions by comparing `list_roots()` against Unity project paths.
+**HTTP only.** A single shared Python server; Unity dials out to the WebSocket hub at `/hub/plugin` and registers itself with `PluginHub`. Multi-agent ready: per-session instance routing lives in FastMCP's session-scoped state (key `mcpforunity.active_instance`), keyed off `ctx.session_id` (the `Mcp-Session-Id` header), so two MCP sessions can never share a selection (#1023). Unity instances auto-match to Claude sessions by comparing `list_roots()` against Unity project paths.
+
+The stdio transport and its legacy TCP bridge were removed. `--transport` is still accepted (only `http` is valid) so client configs written by older packages keep working; `LegacyClientConfigMigration` rewrites a stale stdio config on the next version bump, and a stdio config that reaches `CheckStatus` is reported as `MissingConfig` so the UI prompts re-Configure.
+
+**Port isolation.** `8080` is the default local server port. Unity's `StartLocalHttpServer` terminates whatever process owns the port it is about to bind, and EditorPrefs are shared machine-wide per Unity version — so anything ephemeral (the test harness, CI) must use its own port and pass it via the `UNITY_MCP_HTTP_URL` env var, which `HttpEndpointUtility.GetLocalBaseUrl()` reads ahead of the pref. Never write an ephemeral endpoint to EditorPrefs.
 
 ## Code Philosophy
 
@@ -170,15 +173,17 @@ tools/check-unity-versions.sh --full    # full EditMode test run
 ```
 
 #### Local headless test harness
-One command boots a headless Hub-licensed Editor against `TestProjects/UnityMCPTests` and runs the smoke + EditMode + PlayMode legs over the bridge — the same entrypoint CI uses (`.github/workflows/e2e-bridge.yml`):
+One command starts its own MCP server on a free ephemeral port, boots a headless Hub-licensed Editor against `TestProjects/UnityMCPTests` pointed at that server, and runs the smoke + EditMode + PlayMode legs:
 
 ```bash
 python tools/local_harness.py
 ```
 
-Key flags: `--legs smoke,editmode,playmode` (subset to run), `--project-path` (target project, default `TestProjects/UnityMCPTests`), `--reuse` (attach to an already-resident bridge instead of booting one), `--keep-alive` (leave the Editor running after the legs), `--no-warmup` (skip the warm-up import phase).
+**It is safe to run while you are working.** It never binds `8080` (or `$UNITY_MCP_HTTP_PORT`), never terminates a process it did not spawn, and never writes EditorPrefs — so your own Editor and server are untouched. Asking for a reserved port (`--http-port 8080`) is a hard stop, exit `2`.
 
-Exit codes: `0` pass, `1` blocking-leg regression, `2` bridge unreachable / setup failure, `3` project does not compile, `4` no Unity license / Hub seat, `5` Editor binary/version not found. Requires a Hub-activated Editor locally (no ULF/serial).
+Key flags: `--legs smoke,editmode,playmode` (subset to run), `--project-path` (target project, default `TestProjects/UnityMCPTests`), `--http-port` (pin the harness server's port; defaults to a free one), `--reuse` (attach to an already-running server + Editor; requires `--http-port`), `--keep-alive` (leave the Editor and server running after the legs), `--no-warmup` (skip the warm-up import phase), `--log-dir` (editor/server logs).
+
+Exit codes: `0` pass, `1` blocking-leg regression, `2` bridge unreachable / setup failure / reserved-port refusal, `3` project does not compile, `4` no Unity license / Hub seat, `5` Editor binary/version not found. Requires a Hub-activated Editor locally (no ULF/serial).
 
 ### How Unity Projects Consume This Package
 Unity projects reference this repo via **git URL** in their `manifest.json` (Unity Package Manager). The Python server is installed via `uvx` from the package. This means **changes to Server/ or MCPForUnity/ must be landed on `main`** — the fork is PRs-only, so land via a PR with the `/land` skill — before they take effect in consuming Unity projects. After the PR merges, update the package in Unity's Package Manager and restart the MCP server.

@@ -78,7 +78,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                     EditorPrefKeys.ProjectScopedToolsLocalHttp,
                     false
                 );
-                projectScopedToolsToggle.tooltip = "When enabled, register project-scoped tools with HTTP Local and stdio transports. Allows per-project tool customization.";
+                projectScopedToolsToggle.tooltip = "When enabled, register project-scoped tools with the HTTP Local transport. Allows per-project tool customization.";
                 projectScopedToolsToggle.RegisterValueChangedCallback(evt =>
                 {
                     EditorPrefs.SetBool(EditorPrefKeys.ProjectScopedToolsLocalHttp, evt.newValue);
@@ -144,10 +144,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                 noteLabel.style.display = hasTools ? DisplayStyle.Flex : DisplayStyle.None;
                 if (hasTools)
                 {
-                    bool isHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-                    noteLabel.text = isHttp
-                        ? "Changes apply after reconnecting or re-registering tools."
-                        : "Stdio mode: toggles sync at startup. After changing toggles, ask the AI to run manage_tools with action 'sync' to refresh.";
+                    noteLabel.text = "Changes apply after reconnecting or re-registering tools.";
                 }
             }
 
@@ -360,7 +357,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
         {
             // Fire and forget - don't block UI thread
             var transportManager = MCPServiceLocator.TransportManager;
-            var client = transportManager.GetClient(TransportMode.Http);
+            var client = transportManager.GetClient();
             if (client == null || !client.IsConnected)
             {
                 return;

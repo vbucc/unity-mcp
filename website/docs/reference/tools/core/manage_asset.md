@@ -14,6 +14,8 @@ description: "Performs asset operations (import, create, modify, delete, etc.) i
 
 Performs asset operations (import, create, modify, delete, etc.) in Unity.
 
+The `modify` action supports: model import settings on FBX/OBJ files (globalScale, importAnimation, animationType, meshCompression, etc.), `materialRemap` for reassigning materials on imported models, component properties on prefab/GameObject assets, material properties, and texture importer settings.
+
 Tip (payload safety): for `action="search"`, prefer paging (`page_size`, `page_number`) and keep `generate_preview=false` (previews can add large base64 blobs).
 
 ## Parameters

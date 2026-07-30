@@ -7,7 +7,6 @@ from mcp.types import ToolAnnotations
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
@@ -52,7 +51,7 @@ async def manage_shader(
         params = {k: v for k, v in params.items() if v is not None}
 
         # Send command via centralized retry helper with instance routing
-        response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_shader", params)
+        response = await send_with_unity_instance(unity_instance, "manage_shader", params)
 
         # Process response from Unity
         if isinstance(response, dict) and response.get("success"):

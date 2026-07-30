@@ -86,3 +86,18 @@ def setup_script_tools():
                                     'validate_script', 'get_sha']):
             mcp.tools[name] = tool_info['func']
     return mcp.tools
+
+
+def patch_script_send(monkeypatch, fake_send):
+    """Route every script-tool Unity send through ``fake_send``.
+
+    The script tools reach Unity from three modules: manage_script and
+    script_apply_edits call the shim directly, and refresh_unity.send_mutation
+    resolves it off the transport package at call time.
+    """
+    import services.tools.manage_script as _ms
+    import services.tools.script_apply_edits as _sae
+    import transport.unity_transport as _ut
+
+    for module in (_ms, _sae, _ut):
+        monkeypatch.setattr(module, "send_with_unity_instance", fake_send)

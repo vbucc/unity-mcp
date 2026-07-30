@@ -162,7 +162,6 @@ class TestInstanceRoutingHTTP:
                              v: state_storage.__setitem__(k, v))
         ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
 
-        monkeypatch.setattr(config, "transport_mode", "http")
         fake_sessions = SessionList(
             sessions={
                 "sess-1": SessionDetails(
@@ -198,7 +197,6 @@ class TestInstanceRoutingHTTP:
                              v: state_storage.__setitem__(k, v))
         ctx.get_state = AsyncMock(side_effect=lambda k: state_storage.get(k))
 
-        monkeypatch.setattr(config, "transport_mode", "http")
         fake_sessions = SessionList(
             sessions={
                 "sess-99": SessionDetails(
@@ -230,7 +228,6 @@ class TestInstanceRoutingHTTP:
         ctx = Mock(spec=Context)
         ctx.session_id = "http-session-3"
 
-        monkeypatch.setattr(config, "transport_mode", "http")
         fake_sessions = SessionList(sessions={})
         monkeypatch.setattr(
             "services.tools.set_active_instance.PluginHub.get_sessions",
@@ -248,12 +245,11 @@ class TestInstanceRoutingHTTP:
 
     @pytest.mark.asyncio
     async def test_set_active_instance_http_hash_ambiguous(self, monkeypatch):
-        """Ambiguous hash prefixes should mirror stdio error messaging."""
+        """Ambiguous hash prefixes should name every candidate."""
         middleware = UnityInstanceMiddleware()
         ctx = Mock(spec=Context)
         ctx.session_id = "http-session-4"
 
-        monkeypatch.setattr(config, "transport_mode", "http")
         fake_sessions = SessionList(
             sessions={
                 "sess-a": SessionDetails(project="ProjA", hash="abc12345", unity_version="2022", connected_at="now"),

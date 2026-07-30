@@ -25,7 +25,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
     public class ServerManagementServiceCharacterizationTests
     {
         private ServerManagementService _service;
-        private bool _savedUseHttpTransport;
         private string _savedHttpUrl;
         private string _savedHttpRemoteUrl;
         private string _savedHttpTransportScope;
@@ -54,7 +53,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             _service = new ServerManagementService();
             // Save current settings
             _savedLaunchConfirmed = EditorPrefs.GetBool(EditorPrefKeys.HttpServerLaunchConfirmed, false);
-            _savedUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _savedHttpUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
             _savedHttpRemoteUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
             _savedHttpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
@@ -83,7 +81,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         public void TearDown()
         {
             // Restore settings
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _savedUseHttpTransport);
             if (!string.IsNullOrEmpty(_savedHttpUrl))
             {
                 EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, _savedHttpUrl);
@@ -127,6 +124,31 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         }
 
         #region StartLocalHttpServer First-Time-Confirm Gating
+
+        /// <summary>
+        /// Temporarily opts this process into batch-mode server starts.
+        ///
+        /// ShouldSkipBatchServerStart short-circuits StartLocalHttpServer in a headless
+        /// Editor, and that guard is exactly what stops the test harness from reaching
+        /// StopLocalHttpServerInternal — which terminates whatever owns the target port,
+        /// i.e. a developer's live server. Tests that need the launch path target an
+        /// isolated port with a fake launcher, so they opt in for their own duration
+        /// only rather than the harness enabling it for the whole run.
+        /// </summary>
+        private sealed class BatchServerStartOverride : IDisposable
+        {
+            private const string EnvVar = "UNITY_MCP_ALLOW_BATCH";
+            private readonly string _saved;
+
+            public BatchServerStartOverride()
+            {
+                _saved = Environment.GetEnvironmentVariable(EnvVar);
+                Environment.SetEnvironmentVariable(EnvVar, "1");
+            }
+
+            public void Dispose() => Environment.SetEnvironmentVariable(EnvVar, _saved);
+        }
+
 
         // A fake launcher that records the headless launch request, then returns a harmless
         // no-op process (true / cmd exit) so Process.Start SUCCEEDS and exits immediately — no real
@@ -222,7 +244,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         public void StartLocalHttpServer_AlreadyConfirmed_SkipsDialogAndLaunchesHeadless()
         {
             // Arrange - local URL + HTTP enabled + confirmation already given.
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:59998");
             EditorPrefs.SetBool(EditorPrefKeys.HttpServerLaunchConfirmed, true);
             EditorConfigurationCache.Instance.Refresh();
@@ -232,6 +253,7 @@ namespace MCPForUnityTests.Editor.Services.Characterization
 
             // Act - non-quiet, but confirmed: must NOT show a dialog and must launch headless.
             // (The fake launcher aborts the real spawn, so the return value may be false; we assert on the launch attempt.)
+            using var allowBatch = new BatchServerStartOverride();
             LogAssert.ignoreFailingMessages = true;
             try
             {
@@ -252,7 +274,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         public void StartLocalHttpServer_Quiet_BypassesDialogAndDoesNotSetConfirmedFlag()
         {
             // Arrange - local URL + HTTP enabled + NOT yet confirmed.
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:59997");
             EditorPrefs.SetBool(EditorPrefKeys.HttpServerLaunchConfirmed, false);
             EditorConfigurationCache.Instance.Refresh();
@@ -261,6 +282,7 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             var service = BuildServiceWithFakeLauncher(launcher);
 
             // Act - quiet (auto-start) path must never show a dialog and must launch headless.
+            using var allowBatch = new BatchServerStartOverride();
             LogAssert.ignoreFailingMessages = true;
             try
             {
@@ -281,7 +303,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         public void StartLocalHttpServer_LaunchesIntoPerPortLaunchLog()
         {
             // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:59996");
             EditorPrefs.SetBool(EditorPrefKeys.HttpServerLaunchConfirmed, true);
             EditorConfigurationCache.Instance.Refresh();
@@ -290,6 +311,7 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             var service = BuildServiceWithFakeLauncher(launcher);
 
             // Act
+            using var allowBatch = new BatchServerStartOverride();
             LogAssert.ignoreFailingMessages = true;
             try
             {
@@ -428,26 +450,9 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         #region CanStartLocalServer Tests
 
         [Test]
-        public void CanStartLocalServer_HttpDisabled_ReturnsFalse()
-        {
-            // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
-            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:8080");
-            EditorConfigurationCache.Instance.Refresh();
-            _service = new ServerManagementService();
-
-            // Act
-            bool result = _service.CanStartLocalServer();
-
-            // Assert
-            Assert.IsFalse(result, "Cannot start local server when HTTP transport is disabled");
-        }
-
-        [Test]
         public void CanStartLocalServer_HttpEnabledLocalUrl_ReturnsTrue()
         {
             // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:8080");
             EditorConfigurationCache.Instance.Refresh();
             _service = new ServerManagementService();
@@ -463,7 +468,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         public void CanStartLocalServer_HttpEnabledRemoteUrl_ReturnsFalse()
         {
             // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://remote.server.com:8080");
             EditorConfigurationCache.Instance.Refresh();
             _service = new ServerManagementService();
@@ -479,7 +483,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         public void CanStartLocalServer_HttpEnabledZeroBind_DisallowedByDefault_ReturnsFalse()
         {
             // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetBool(EditorPrefKeys.AllowLanHttpBind, false);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://0.0.0.0:8080");
             EditorConfigurationCache.Instance.Refresh();
@@ -496,7 +499,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         public void CanStartLocalServer_HttpEnabledZeroBind_WithOptIn_ReturnsTrue()
         {
             // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetBool(EditorPrefKeys.AllowLanHttpBind, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://0.0.0.0:8080");
             EditorConfigurationCache.Instance.Refresh();
@@ -589,30 +591,11 @@ namespace MCPForUnityTests.Editor.Services.Characterization
 
         #region TryGetLocalHttpServerCommand Tests
 
-        [Test]
-        public void TryGetLocalHttpServerCommand_HttpDisabled_ReturnsFalseWithError()
-        {
-            // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
-            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:8080");
-            EditorConfigurationCache.Instance.Refresh();
-            _service = new ServerManagementService();
-
-            // Act
-            bool result = _service.TryGetLocalHttpServerCommand(out string command, out string error);
-
-            // Assert
-            Assert.IsFalse(result, "Should return false when HTTP transport is disabled");
-            Assert.IsNull(command, "Command should be null when failing");
-            Assert.IsNotNull(error, "Error message should be provided");
-            Assert.That(error, Does.Contain("HTTP").IgnoreCase, "Error should mention HTTP transport");
-        }
 
         [Test]
         public void TryGetLocalHttpServerCommand_RemoteUrl_ReturnsFalseWithError()
         {
             // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://remote.server.com:8080");
             EditorConfigurationCache.Instance.Refresh();
             _service = new ServerManagementService();
@@ -631,7 +614,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         public void TryGetLocalHttpServerCommand_LocalUrl_ReturnsCommandOrError()
         {
             // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:8080");
             _service = new ServerManagementService();
 
@@ -944,11 +926,15 @@ namespace MCPForUnityTests.Editor.Services.Characterization
 
         #region StartLocalHttpServer (quiet) Tests
 
+        /// <summary>
+        /// The batch guard is what keeps an ephemeral Editor (test harness, CI) from
+        /// reaching StopLocalHttpServerInternal, which terminates whatever process owns
+        /// the target port — i.e. a developer's live server on 8080.
+        /// </summary>
         [Test]
-        public void StartLocalHttpServerQuiet_HttpDisabled_ReturnsFalse()
+        public void StartLocalHttpServerQuiet_InBatchMode_RefusesToStart()
         {
             // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
             EditorConfigurationCache.Instance.Refresh();
             _service = new ServerManagementService();
 
@@ -965,7 +951,7 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             }
 
             // Assert
-            Assert.IsFalse(result, "Should return false when HTTP transport is disabled");
+            Assert.IsFalse(result, "A batch-mode Editor must never start or restart the shared HTTP server");
         }
 
         [Test]
@@ -1028,7 +1014,6 @@ namespace MCPForUnityTests.Editor.Services.Characterization
                 int port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
                 EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, $"http://127.0.0.1:{port}");
-                EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true); // absent the guard, the flow would reach the stop-existing step
                 EditorConfigurationCache.Instance.Refresh();
                 _service = new ServerManagementService();
 

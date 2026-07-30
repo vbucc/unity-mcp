@@ -136,18 +136,6 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Record bridge startup event
-        /// </summary>
-        public static void RecordBridgeStartup()
-        {
-            RecordEvent("bridge_startup", new Dictionary<string, object>
-            {
-                ["bridge_version"] = AssetPathUtility.GetPackageVersion(),
-                ["auto_connect"] = StdioBridgeHost.IsAutoConnectMode()
-            });
-        }
-
-        /// <summary>
         /// Record bridge connection event
         /// </summary>
         public static void RecordBridgeConnection(bool success, string error = null)

@@ -73,10 +73,10 @@ class UnityInstanceMiddleware(Middleware):
         """Store the active instance for this MCP session.
 
         Persisted via FastMCP's session-scoped state store, which keys by
-        ``ctx.session_id`` (the MCP-Session-Id header on HTTP, a per-subprocess
-        UUID on stdio). Two MCP sessions cannot share state — see #1023 for the
-        bug this replaces, which keyed on the peer-supplied ``client_id`` and
-        collapsed multiple clients onto the same record.
+        ``ctx.session_id`` (the MCP-Session-Id header). Two MCP sessions cannot
+        share state — see #1023 for the bug this replaces, which keyed on the
+        peer-supplied ``client_id`` and collapsed multiple clients onto the same
+        record.
         """
         await ctx.set_state(self._ACTIVE_INSTANCE_STATE_KEY, instance_id)
 
@@ -96,12 +96,11 @@ class UnityInstanceMiddleware(Middleware):
 
     async def _discover_instances(self, ctx) -> list:
         """
-        Return running Unity instances across both HTTP (PluginHub) and stdio transports.
+        Return running Unity instances from PluginHub.
 
         Returns a list of objects with .id (Name@hash) and .hash attributes.
         """
         from types import SimpleNamespace
-        transport = (config.transport_mode or "stdio").lower()
         results: list = []
 
         if PluginHub.is_configured():
@@ -126,16 +125,6 @@ class UnityInstanceMiddleware(Middleware):
                     raise
                 logger.debug("PluginHub instance discovery failed (%s)", type(exc).__name__, exc_info=True)
 
-        if not results and transport != "http":
-            try:
-                from transport.legacy.unity_connection import get_unity_connection_pool
-                pool = get_unity_connection_pool()
-                results = pool.discover_all_instances(force_refresh=True)
-            except Exception as exc:
-                if isinstance(exc, (SystemExit, KeyboardInterrupt)):
-                    raise
-                logger.debug("Stdio instance discovery failed (%s)", type(exc).__name__, exc_info=True)
-
         return results
 
     async def _resolve_instance_value(self, value: str, ctx) -> str:
@@ -143,7 +132,6 @@ class UnityInstanceMiddleware(Middleware):
         Resolve a unity_instance string to a validated instance identifier.
 
         Accepts:
-          - Bare port number like "6401" (stdio only) -> resolved Name@hash
           - "Name@hash" exact match
           - Hash prefix (unique prefix match against running instances)
 
@@ -152,28 +140,6 @@ class UnityInstanceMiddleware(Middleware):
         value = value.strip()
         if not value:
             raise ValueError("unity_instance value must not be empty.")
-
-        transport = (config.transport_mode or "stdio").lower()
-
-        # Port number (stdio only) — resolve to Name@hash via status file lookup
-        if value.isdigit():
-            if transport == "http":
-                raise ValueError(
-                    f"Port-based targeting ('{value}') is not supported in HTTP transport mode. "
-                    "Use Name@hash or a hash prefix. Read mcpforunity://instances for available instances."
-                )
-            port_int = int(value)
-            instances = await self._discover_instances(ctx)
-            for inst in instances:
-                if getattr(inst, "port", None) == port_int:
-                    return inst.id
-            available = ", ".join(
-                f"{getattr(i, 'id', '?')} (port {getattr(i, 'port', '?')})"
-                for i in instances
-            ) or "none"
-            raise ValueError(
-                f"No Unity instance found on port {value}. Available: {available}."
-            )
 
         instances = await self._discover_instances(ctx)
         ids = {
@@ -274,45 +240,6 @@ class UnityInstanceMiddleware(Middleware):
             return matches[0]
         return None
 
-    async def _try_match_stdio_by_path(self, ctx, instances: list) -> str | None:
-        """Match client roots against stdio-discovered Unity instances by path."""
-        try:
-            roots = await ctx.list_roots()
-        except Exception:
-            return None
-        if not roots:
-            return None
-
-        client_paths: list[str] = []
-        for root in roots:
-            uri = str(getattr(root, "uri", ""))
-            if uri.startswith("file://"):
-                client_paths.append(uri[7:])
-        if not client_paths:
-            return None
-
-        matches: list[str] = []
-        for inst in instances:
-            inst_path = getattr(inst, "path", None)
-            inst_id = getattr(inst, "id", None)
-            if not inst_path or not inst_id:
-                continue
-            # Stdio path may include /Assets suffix — strip it for matching
-            project_path = inst_path.rstrip("/")
-            if project_path.endswith("/Assets"):
-                project_path = project_path[:-7]
-            for client_path in client_paths:
-                normalized = client_path.rstrip("/")
-                if (normalized == project_path
-                        or normalized.startswith(project_path + "/")
-                        or project_path.startswith(normalized + "/")):
-                    matches.append(inst_id)
-                    break
-
-        if len(matches) == 1:
-            return matches[0]
-        return None
-
     async def _maybe_autoselect_instance(self, ctx) -> str | None:
         """
         Auto-select the sole Unity instance when no active instance is set.
@@ -322,9 +249,8 @@ class UnityInstanceMiddleware(Middleware):
         to stick for subsequent tool/resource calls in the same session.
         """
         try:
-            transport = (config.transport_mode or "stdio").lower()
             # This implicit behavior works well for solo-users, but is dangerous for multi-user setups
-            if transport == "http" and config.http_remote_hosted:
+            if config.http_remote_hosted:
                 return None
             if PluginHub.is_configured():
                 try:
@@ -358,7 +284,7 @@ class UnityInstanceMiddleware(Middleware):
                         )
                 except (ConnectionError, ValueError, KeyError, TimeoutError, AttributeError) as exc:
                     logger.debug(
-                        "PluginHub auto-select probe failed (%s); falling back to stdio",
+                        "PluginHub auto-select probe failed (%s)",
                         type(exc).__name__,
                         exc_info=True,
                     )
@@ -366,50 +292,7 @@ class UnityInstanceMiddleware(Middleware):
                     if isinstance(exc, (SystemExit, KeyboardInterrupt)):
                         raise
                     logger.debug(
-                        "PluginHub auto-select probe failed with unexpected error (%s); falling back to stdio",
-                        type(exc).__name__,
-                        exc_info=True,
-                    )
-
-            if transport != "http":
-                try:
-                    # Import here to avoid circular imports in legacy transport paths.
-                    from transport.legacy.unity_connection import get_unity_connection_pool
-
-                    pool = get_unity_connection_pool()
-                    instances = pool.discover_all_instances(force_refresh=True)
-                    ids = [getattr(inst, "id", None) for inst in instances]
-                    ids = [inst_id for inst_id in ids if inst_id]
-                    if len(ids) == 1:
-                        chosen = ids[0]
-                        await self.set_active_instance(ctx, chosen)
-                        logger.info(
-                            "Auto-selected sole Unity instance via stdio discovery: %s",
-                            chosen,
-                        )
-                        return chosen
-                    if len(ids) > 1:
-                        chosen = await self._try_match_stdio_by_path(ctx, instances)
-                        if chosen:
-                            await self.set_active_instance(ctx, chosen)
-                            logger.info("Auto-selected Unity instance by project path match (stdio): %s", chosen)
-                            return chosen
-                        logger.info(
-                            "Multiple Unity instances found (%d). Pass unity_instance on any tool call "
-                            "or call set_active_instance to choose one. Available: %s",
-                            len(ids), ", ".join(ids),
-                        )
-                except (ConnectionError, ValueError, KeyError, TimeoutError, AttributeError) as exc:
-                    logger.debug(
-                        "Stdio auto-select probe failed (%s)",
-                        type(exc).__name__,
-                        exc_info=True,
-                    )
-                except Exception as exc:
-                    if isinstance(exc, (SystemExit, KeyboardInterrupt)):
-                        raise
-                    logger.debug(
-                        "Stdio auto-select probe failed with unexpected error (%s)",
+                        "PluginHub auto-select probe failed with unexpected error (%s)",
                         type(exc).__name__,
                         exc_info=True,
                     )
@@ -465,28 +348,15 @@ class UnityInstanceMiddleware(Middleware):
         if not active_instance:
             active_instance = await self._maybe_autoselect_instance(ctx)
         if active_instance:
-            # If using HTTP transport (PluginHub configured), validate session
-            # But for stdio transport (no PluginHub needed or maybe partially configured),
-            # we should be careful not to clear instance just because PluginHub can't resolve it.
-            # The 'active_instance' (Name@hash) might be valid for stdio even if PluginHub fails.
-
             session_id: str | None = None
-            # Only validate via PluginHub if we are actually using HTTP transport.
-            # For stdio transport, skip PluginHub entirely - we only need the instance ID.
-            from transport.unity_transport import _is_http_transport
-            if _is_http_transport() and PluginHub.is_configured():
+            if PluginHub.is_configured():
                 try:
-                    # resolving session_id might fail if the plugin disconnected
-                    # We only need session_id for HTTP transport routing.
-                    # For stdio, we just need the instance ID.
+                    # resolving session_id might fail if the plugin disconnected.
                     # Pass user_id for remote-hosted mode session isolation
                     session_id = await PluginHub._resolve_session_id(active_instance, user_id=user_id)
                 except (ConnectionError, ValueError, KeyError, TimeoutError) as exc:
-                    # If resolution fails, it means the Unity instance is not reachable via HTTP/WS.
-                    # If we are in stdio mode, this might still be fine if the user is just setting state?
-                    # But usually if PluginHub is configured, we expect it to work.
-                    # Let's LOG the error but NOT clear the instance immediately to avoid flickering,
-                    # or at least debug why it's failing.
+                    # If resolution fails, the Unity instance is not reachable over the hub.
+                    # LOG the error but do NOT clear the instance immediately, to avoid flickering.
                     logger.debug(
                         "PluginHub session resolution failed for %s: %s; leaving active_instance unchanged",
                         active_instance,
@@ -563,8 +433,7 @@ class UnityInstanceMiddleware(Middleware):
         return filtered
 
     def _should_filter_tool_listing(self) -> bool:
-        transport = (config.transport_mode or "stdio").lower()
-        return transport == "http" and PluginHub.is_configured()
+        return PluginHub.is_configured()
 
     async def _resolve_enabled_tool_names_for_context(
         self,

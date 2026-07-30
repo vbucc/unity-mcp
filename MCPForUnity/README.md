@@ -63,7 +63,7 @@ The window has four areas: Server Status, Unity Bridge, MCP Client Configuration
   - OpenClaw:
     - Uses `~/.openclaw/openclaw.json` and the `openclaw-mcp-bridge` plugin.
     - MCP for Unity writes `plugins.entries.openclaw-mcp-bridge.config.servers.unityMCP`.
-    - OpenClaw follows the currently selected MCP for Unity transport (`HTTP` or `stdio`).
+    - OpenClaw follows the currently selected MCP for Unity transport scope (`HTTP Local` or `HTTP Remote`).
     - The bridge exposes a proxy tool such as `unityMCP__call`.
 
 Notes:

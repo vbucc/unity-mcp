@@ -33,11 +33,11 @@ def _call_tool(**kwargs):
 
 
 def _sent_command(sent_args):
-    return sent_args[2]
+    return sent_args[1]
 
 
 def _sent_params(sent_args):
-    return sent_args[3]
+    return sent_args[2]
 
 
 @pytest.fixture

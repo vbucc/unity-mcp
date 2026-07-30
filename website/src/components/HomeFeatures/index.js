@@ -24,10 +24,10 @@ function getFeatures(toolCount, toolGroupCount) {
     {
       n: '03',
       kicker: 'TRANSPORT',
-      title: 'HTTP or stdio. Your call.',
-      body: 'HTTP for multi-agent, remote-hosted, and shared workflows. Stdio for single-client setups like Claude Desktop. Auto-detected and auto-configured.',
+      title: 'One server. Every agent.',
+      body: 'A single HTTP server hosts every client at once — local or remote-hosted, with per-session instance routing. Auto-detected and auto-configured.',
       href: '/architecture/transports',
-      cta: 'HTTP vs stdio',
+      cta: 'How the transport works',
     },
     {
       n: '04',

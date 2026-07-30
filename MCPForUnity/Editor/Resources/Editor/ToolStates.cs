@@ -8,7 +8,7 @@ namespace MCPForUnity.Editor.Resources.Editor
 {
     /// <summary>
     /// Returns the enabled/disabled state of all discovered tools, grouped by group name.
-    /// Used by the Python server (especially in stdio mode) to sync tool visibility.
+    /// Used by the Python server to sync tool visibility.
     /// </summary>
     [McpForUnityResource("get_tool_states")]
     public static class ToolStates

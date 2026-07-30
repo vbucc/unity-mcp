@@ -438,7 +438,7 @@ class TestClassifyEditorLog:
 
     def test_clean_ready_log_is_ok(self):
         log = (
-            "[MCPForUnity] Bridge listening on port 6400\n"
+            "[MCPForUnity] WebSocket connected to http://127.0.0.1:8123\n"
             "AutoConnect started; bound to loopback\n"
         )
         assert classify_editor_log(log, license_grace_elapsed=True) == "ready_ok"
@@ -828,3 +828,226 @@ class TestUtfTransportResilience:
         job_id, _ = lh._start_utf(fake_send, "EditMode", "inst@hash", None, 8, 50)
         assert job_id == "J9"
         assert calls["n"] == 2
+
+
+# ===========================================================================
+# Port isolation
+#
+# The harness must never bind the port a developer's everyday MCP server uses:
+# Unity's StartLocalHttpServer terminates whatever owns the port it is about to
+# bind, so a collision would take down a live game-dev session.
+# ===========================================================================
+class TestPortIsolation:
+    def test_default_dev_port_is_always_forbidden(self):
+        assert lh.DEFAULT_DEV_HTTP_PORT in lh.forbidden_ports({})
+
+    def test_env_port_is_forbidden(self):
+        blocked = lh.forbidden_ports({"UNITY_MCP_HTTP_PORT": "9123"})
+        assert 9123 in blocked
+        assert lh.DEFAULT_DEV_HTTP_PORT in blocked
+
+    def test_env_url_port_is_forbidden(self):
+        blocked = lh.forbidden_ports({"UNITY_MCP_HTTP_URL": "http://127.0.0.1:9500/mcp"})
+        assert 9500 in blocked
+
+    def test_unparseable_env_is_ignored(self):
+        blocked = lh.forbidden_ports({"UNITY_MCP_HTTP_PORT": "not-a-port"})
+        assert blocked == {lh.DEFAULT_DEV_HTTP_PORT}
+
+    def test_explicit_forbidden_port_is_a_hard_stop(self):
+        with pytest.raises(SystemExit) as exc:
+            lh.resolve_harness_port(lh.DEFAULT_DEV_HTTP_PORT, env={})
+        assert exc.value.code == 2
+
+    def test_explicit_env_port_is_a_hard_stop(self):
+        with pytest.raises(SystemExit) as exc:
+            lh.resolve_harness_port(9123, env={"UNITY_MCP_HTTP_PORT": "9123"})
+        assert exc.value.code == 2
+
+    def test_explicit_free_port_is_accepted(self):
+        assert lh.resolve_harness_port(9999, env={}) == 9999
+
+    def test_auto_pick_skips_forbidden_ports(self):
+        picks = iter([lh.DEFAULT_DEV_HTTP_PORT, lh.DEFAULT_DEV_HTTP_PORT, 51234])
+        got = lh.resolve_harness_port(None, env={}, pick=lambda: next(picks))
+        assert got == 51234
+
+    def test_auto_pick_gives_up_rather_than_binding_a_forbidden_port(self):
+        with pytest.raises(SystemExit) as exc:
+            lh.resolve_harness_port(None, env={}, pick=lambda: lh.DEFAULT_DEV_HTTP_PORT)
+        assert exc.value.code == 2
+
+    def test_pick_free_port_returns_a_bindable_port(self):
+        port = lh.pick_free_port()
+        assert 1024 < port < 65536
+
+    def test_base_url_shape(self):
+        assert lh.harness_base_url(8123) == "http://127.0.0.1:8123"
+
+
+class TestHarnessEditorEnv:
+    def test_resident_env_points_editor_at_harness_server(self):
+        env = lh.LocalLauncher.resident_env({}, "http://127.0.0.1:8123")
+        assert env["UNITY_MCP_HTTP_URL"] == "http://127.0.0.1:8123"
+
+    def test_resident_env_does_not_allow_batch_server_management(self):
+        """UNITY_MCP_ALLOW_BATCH is what lets a batch Editor start/stop a server,
+        and stopping one terminates whatever owns the port. The harness owns its
+        server; Unity must never touch it."""
+        env = lh.LocalLauncher.resident_env({}, "http://127.0.0.1:8123")
+        assert "UNITY_MCP_ALLOW_BATCH" not in env
+
+    def test_resident_env_writes_no_editorprefs_hint(self):
+        """The endpoint travels by env only — EditorPrefs are machine-wide."""
+        env = lh.LocalLauncher.resident_env({"PATH": "/usr/bin"}, "http://127.0.0.1:8123")
+        assert env["PATH"] == "/usr/bin"
+        assert set(env) - {"PATH"} == {"UNITY_MCP_HTTP_URL"}
+
+
+class TestInstanceMatching:
+    # /api/instances rows carry project + hash, not a prebuilt id.
+    def test_builds_id_from_project_and_hash(self):
+        assert lh._instance_id({"project": "Foo", "hash": "abcd1234"}) == "Foo@abcd1234"
+
+    def test_id_is_none_when_fields_missing(self):
+        assert lh._instance_id({"project": "Foo"}) is None
+        assert lh._instance_id({"hash": "abcd1234"}) is None
+
+    def test_matches_by_project_folder_name(self):
+        instances = [
+            {"project": "Other", "hash": "aaaa1111"},
+            {"project": "UnityMCPTests", "hash": "bbbb2222"},
+        ]
+        got = lh._match_instance(instances, Path("/repo/TestProjects/UnityMCPTests"))
+        assert got == "UnityMCPTests@bbbb2222"
+
+    def test_falls_back_to_sole_instance(self):
+        instances = [{"project": "Whatever", "hash": "cccc3333"}]
+        assert lh._match_instance(instances, Path("/repo/Other")) == "Whatever@cccc3333"
+
+    def test_ambiguous_without_a_name_match_is_none(self):
+        instances = [
+            {"project": "A", "hash": "aaaa1111"},
+            {"project": "B", "hash": "bbbb2222"},
+        ]
+        assert lh._match_instance(instances, Path("/repo/C")) is None
+
+    def test_no_instances_is_none(self):
+        assert lh._match_instance([], Path("/repo/C")) is None
+
+
+class TestUnityReadinessGate:
+    """/api/command returns Unity's raw envelope, not a normalized dict."""
+
+    def test_ok_accepts_raw_unity_envelope(self):
+        assert lh._ok({"status": "success", "result": {"success": True}})
+
+    def test_ok_accepts_normalized_shape(self):
+        assert lh._ok({"success": True})
+
+    def test_ok_rejects_failure_envelope(self):
+        assert not lh._ok({"success": False, "hint": "retry"})
+        assert not lh._ok({"status": "error"})
+        assert not lh._ok(None)
+
+
+class TestSenderRetries:
+    """/api/command has no server-side reload retry, so the sender owns it."""
+
+    def test_detects_reloading_by_state(self):
+        assert lh._is_reloading({"state": "reloading"})
+
+    def test_detects_reloading_by_nested_reason(self):
+        assert lh._is_reloading({"success": False, "data": {"reason": "reloading"}})
+
+    def test_detects_reloading_by_message(self):
+        assert lh._is_reloading({"error": "Editor is reloading, retry"})
+
+    def test_normal_response_is_not_reloading(self):
+        assert not lh._is_reloading({"status": "success", "result": {"success": True}})
+        assert not lh._is_reloading("nope")
+
+    def test_retries_until_not_reloading(self, monkeypatch):
+        calls = []
+        replies = [{"state": "reloading"}, {"state": "reloading"},
+                   {"status": "success", "result": {"success": True}}]
+
+        def fake_post(url, payload, timeout):
+            calls.append(url)
+            return replies[len(calls) - 1]
+
+        monkeypatch.setattr(lh, "_http_post_json", fake_post)
+        monkeypatch.setattr(lh.time, "sleep", lambda _s: None)
+        send = lh.make_sender("http://127.0.0.1:9")
+        resp = send("run_tests", {}, max_retries=4, retry_ms=1)
+        assert lh._ok(resp)
+        assert len(calls) == 3
+
+    def test_gives_up_after_max_retries(self, monkeypatch):
+        monkeypatch.setattr(lh, "_http_post_json",
+                            lambda url, payload, timeout: {"state": "reloading"})
+        monkeypatch.setattr(lh.time, "sleep", lambda _s: None)
+        send = lh.make_sender("http://127.0.0.1:9")
+        assert lh._is_reloading(send("run_tests", {}, max_retries=2, retry_ms=1))
+
+    def test_retries_transport_errors_then_raises(self, monkeypatch):
+        calls = []
+
+        def boom(url, payload, timeout):
+            calls.append(url)
+            raise OSError("connection reset")
+
+        monkeypatch.setattr(lh, "_http_post_json", boom)
+        monkeypatch.setattr(lh.time, "sleep", lambda _s: None)
+        send = lh.make_sender("http://127.0.0.1:9")
+        with pytest.raises(OSError):
+            send("run_tests", {}, max_retries=2, retry_ms=1)
+        assert len(calls) == 3
+
+    def test_no_retry_when_not_requested(self, monkeypatch):
+        calls = []
+
+        def fake_post(url, payload, timeout):
+            calls.append(url)
+            return {"state": "reloading"}
+
+        monkeypatch.setattr(lh, "_http_post_json", fake_post)
+        send = lh.make_sender("http://127.0.0.1:9")
+        send("ping", {}, max_retries=3, retry_ms=1, retry_on_reload=False)
+        assert len(calls) == 1
+
+
+class TestEnvelopeUnwrapping:
+    """The outer envelope's "status" collides with the UTF job status."""
+
+    def test_unwraps_transport_envelope(self):
+        got = lh._unwrap_envelope({"status": "success", "result": {"status": "running"}})
+        assert got == {"status": "running"}
+
+    def test_leaves_already_unwrapped_payload_alone(self):
+        payload = {"success": True, "status": "succeeded"}
+        assert lh._unwrap_envelope(payload) is payload
+
+    def test_leaves_non_dict_alone(self):
+        assert lh._unwrap_envelope("nope") == "nope"
+        assert lh._unwrap_envelope(None) is None
+
+    def test_leaves_string_result_alone(self):
+        payload = {"status": "success", "result": "done"}
+        assert lh._unwrap_envelope(payload) is payload
+
+    def test_dig_finds_job_status_after_unwrap(self, monkeypatch):
+        """The regression: _dig must see the job status, not the envelope's."""
+        envelope = {"status": "success",
+                    "result": {"success": True, "data": {"status": "running"}}}
+        assert lh._dig(envelope, "status") == "success"          # the trap
+        assert lh._dig(lh._unwrap_envelope(envelope), "status") == "running"
+
+    def test_sender_returns_unwrapped_payload(self, monkeypatch):
+        monkeypatch.setattr(
+            lh, "_http_post_json",
+            lambda url, payload, timeout: {"status": "success",
+                                           "result": {"success": True, "status": "succeeded"}})
+        send = lh.make_sender("http://127.0.0.1:9")
+        resp = send("get_test_job", {"job_id": "j1"})
+        assert lh._dig(resp, "status") == "succeeded"

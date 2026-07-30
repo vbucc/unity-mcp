@@ -8,12 +8,12 @@ import services.tools.manage_scriptable_object as mod
 async def test_manage_scriptable_object_forwards_create_params(monkeypatch):
     captured = {}
 
-    async def fake_async_send(cmd, params, **kwargs):
+    async def fake_async_send(_unity_instance, cmd, params, **kwargs):
         captured["cmd"] = cmd
         captured["params"] = params
         return {"success": True, "data": {"ok": True}}
 
-    monkeypatch.setattr(mod, "async_send_command_with_retry", fake_async_send)
+    monkeypatch.setattr(mod, "send_with_unity_instance", fake_async_send)
 
     ctx = DummyContext()
     await ctx.set_state("unity_instance", "UnityMCPTests@dummy")
@@ -45,12 +45,12 @@ async def test_manage_scriptable_object_forwards_create_params(monkeypatch):
 async def test_manage_scriptable_object_forwards_modify_params(monkeypatch):
     captured = {}
 
-    async def fake_async_send(cmd, params, **kwargs):
+    async def fake_async_send(_unity_instance, cmd, params, **kwargs):
         captured["cmd"] = cmd
         captured["params"] = params
         return {"success": True, "data": {"ok": True}}
 
-    monkeypatch.setattr(mod, "async_send_command_with_retry", fake_async_send)
+    monkeypatch.setattr(mod, "send_with_unity_instance", fake_async_send)
 
     ctx = DummyContext()
     await ctx.set_state("unity_instance", "UnityMCPTests@dummy")
@@ -75,12 +75,12 @@ async def test_manage_scriptable_object_forwards_modify_params(monkeypatch):
 async def test_manage_scriptable_object_forwards_dry_run_param(monkeypatch):
     captured = {}
 
-    async def fake_async_send(cmd, params, **kwargs):
+    async def fake_async_send(_unity_instance, cmd, params, **kwargs):
         captured["cmd"] = cmd
         captured["params"] = params
         return {"success": True, "data": {"dryRun": True, "validationResults": []}}
 
-    monkeypatch.setattr(mod, "async_send_command_with_retry", fake_async_send)
+    monkeypatch.setattr(mod, "send_with_unity_instance", fake_async_send)
 
     ctx = DummyContext()
     await ctx.set_state("unity_instance", "UnityMCPTests@dummy")
@@ -107,12 +107,12 @@ async def test_manage_scriptable_object_dry_run_string_coercion(monkeypatch):
     """Test that dry_run accepts string 'true' and coerces to boolean."""
     captured = {}
 
-    async def fake_async_send(cmd, params, **kwargs):
+    async def fake_async_send(_unity_instance, cmd, params, **kwargs):
         captured["cmd"] = cmd
         captured["params"] = params
         return {"success": True, "data": {"dryRun": True}}
 
-    monkeypatch.setattr(mod, "async_send_command_with_retry", fake_async_send)
+    monkeypatch.setattr(mod, "send_with_unity_instance", fake_async_send)
 
     ctx = DummyContext()
     await ctx.set_state("unity_instance", "UnityMCPTests@dummy")

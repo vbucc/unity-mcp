@@ -17,7 +17,7 @@ from services.registry import get_registered_tools
 def mock_unity(monkeypatch):
     captured: dict[str, object] = {}
 
-    async def fake_send(send_fn, unity_instance, tool_name, params):
+    async def fake_send(unity_instance, tool_name, params):
         captured["unity_instance"] = unity_instance
         captured["tool_name"] = tool_name
         captured["params"] = params

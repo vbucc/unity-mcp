@@ -15,7 +15,6 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.preflight import preflight
 import transport.unity_transport as unity_transport
-from transport.legacy.unity_connection import async_send_command_with_retry
 from transport.plugin_hub import PluginHub
 from utils.focus_nudge import nudge_unity_focus, should_nudge, reset_nudge_backoff
 
@@ -232,7 +231,6 @@ async def run_tests(
         params["initTimeout"] = init_timeout
 
     response = await unity_transport.send_with_unity_instance(
-        async_send_command_with_retry,
         unity_instance,
         "run_tests",
         params,
@@ -279,7 +277,6 @@ async def get_test_job(
 
     async def _fetch_status() -> dict[str, Any]:
         return await unity_transport.send_with_unity_instance(
-            async_send_command_with_retry,
             unity_instance,
             "get_test_job",
             params,

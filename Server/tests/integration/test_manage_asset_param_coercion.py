@@ -7,12 +7,12 @@ import services.tools.manage_asset as manage_asset_mod
 def test_manage_asset_pagination_coercion(monkeypatch):
     captured = {}
 
-    async def fake_async_send(cmd, params, **kwargs):
+    async def fake_async_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {}}
 
     monkeypatch.setattr(
-        manage_asset_mod, "async_send_command_with_retry", fake_async_send)
+        manage_asset_mod, "send_with_unity_instance", fake_async_send)
 
     result = asyncio.run(
         manage_asset_mod.manage_asset(

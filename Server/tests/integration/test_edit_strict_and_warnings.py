@@ -1,6 +1,6 @@
 import pytest
 
-from .test_helpers import DummyContext, setup_script_tools
+from .test_helpers import DummyContext, setup_script_tools, patch_script_send
 
 
 @pytest.mark.asyncio
@@ -8,16 +8,11 @@ async def test_explicit_zero_based_normalized_warning(monkeypatch):
     tools = setup_script_tools()
     apply_edits = tools["apply_text_edits"]
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         # Simulate Unity path returning minimal success
         return {"success": True}
 
-    import transport.legacy.unity_connection
-    monkeypatch.setattr(
-        transport.legacy.unity_connection,
-        "async_send_command_with_retry",
-        fake_send,
-    )
+    patch_script_send(monkeypatch, fake_send)
 
     # Explicit fields given as 0-based (invalid); SDK should normalize and warn
     edits = [{"startLine": 0, "startCol": 0,
@@ -43,15 +38,10 @@ async def test_strict_zero_based_error(monkeypatch):
     tools = setup_script_tools()
     apply_edits = tools["apply_text_edits"]
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         return {"success": True}
 
-    import transport.legacy.unity_connection
-    monkeypatch.setattr(
-        transport.legacy.unity_connection,
-        "async_send_command_with_retry",
-        fake_send,
-    )
+    patch_script_send(monkeypatch, fake_send)
 
     edits = [{"startLine": 0, "startCol": 0,
               "endLine": 0, "endCol": 0, "newText": "//x"}]

@@ -25,7 +25,7 @@ class TestManageTextureIntegration:
         """Test creating a texture with RGB color array (0-255)."""
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(instance, cmd, params, **kwargs):
             captured["cmd"] = cmd
             captured["params"] = params
             return {"success": True, "message": "Created texture"}
@@ -49,7 +49,7 @@ class TestManageTextureIntegration:
         """Test creating a texture with normalized color (0.0-1.0)."""
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(instance, cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Created texture"}
 
@@ -71,7 +71,7 @@ class TestManageTextureIntegration:
         """Test creating a sprite with checkerboard pattern."""
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(instance, cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Created sprite", "data": {"asSprite": True}}
 
@@ -98,7 +98,7 @@ class TestManageTextureIntegration:
         """Test creating a texture with import settings (conversion of snake_case to camelCase)."""
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(instance, cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Created texture"}
 
@@ -128,7 +128,7 @@ class TestManageTextureIntegration:
         """Test texture modify parameter conversion."""
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(instance, cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Modified texture"}
 
@@ -155,7 +155,7 @@ class TestManageTextureIntegration:
         """Test texture modify pixel array normalization."""
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(instance, cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Modified texture"}
 
@@ -238,7 +238,7 @@ class TestManageTextureIntegration:
         """Test texture delete parameter pass-through."""
         captured = {}
 
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(instance, cmd, params, **kwargs):
             captured["params"] = params
             return {"success": True, "message": "Deleted texture"}
 
@@ -256,7 +256,7 @@ class TestManageTextureIntegration:
 
     def test_invalid_dimensions(self, monkeypatch):
         """Test error handling for invalid dimensions."""
-        async def fake_send(func, instance, cmd, params, **kwargs):
+        async def fake_send(instance, cmd, params, **kwargs):
             w = params.get("width", 0)
             if w > 4096:
                 return {"success": False, "message": "Invalid dimensions: 5000x64. Must be 1-4096."}

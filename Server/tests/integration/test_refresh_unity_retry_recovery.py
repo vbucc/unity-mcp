@@ -22,7 +22,7 @@ async def test_refresh_unity_recovers_from_retry_disconnect(monkeypatch):
     inst = "UnityMCPTests@cc8756d4cce0805a"
     external_changes_scanner._states[inst] = ExternalChangesState(dirty=True, dirty_since_unix_ms=1)
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, command_type, params, **kwargs):
+    async def fake_send_with_unity_instance(unity_instance, command_type, params, **kwargs):
         if command_type == "refresh_unity":
             return {"success": False, "error": "disconnected", "hint": "retry"}
         elif command_type == "get_editor_state":

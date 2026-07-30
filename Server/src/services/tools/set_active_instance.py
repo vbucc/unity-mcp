@@ -5,7 +5,6 @@ from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
-from transport.legacy.unity_connection import get_unity_connection_pool
 from transport.unity_instance_middleware import get_unity_instance_middleware
 from transport.plugin_hub import PluginHub
 from core.config import config
@@ -14,73 +13,33 @@ from core.config import config
 @mcp_for_unity_tool(
     unity_target=None,
     group=None,
-    description="Set the active Unity instance for this client/session. Accepts Name@hash, hash prefix, or port number (stdio only).",
+    description="Set the active Unity instance for this client/session. Accepts Name@hash or a hash prefix.",
     annotations=ToolAnnotations(
         title="Set Active Instance",
     ),
 )
 async def set_active_instance(
         ctx: Context,
-        instance: Annotated[str, "Target instance (Name@hash, hash prefix, or port number in stdio mode)"]
+        instance: Annotated[str, "Target instance (Name@hash or hash prefix)"]
 ) -> dict[str, Any]:
-    transport = (config.transport_mode or "stdio").lower()
-
-    # Port number shorthand (stdio only) — resolve to Name@hash via pool discovery
-    value = (instance or "").strip()
-    if value.isdigit():
-        if transport == "http":
-            return {
-                "success": False,
-                "error": f"Port-based targeting ('{value}') is not supported in HTTP transport mode. "
-                         "Use Name@hash or a hash prefix. Read mcpforunity://instances for available instances."
-            }
-        port_int = int(value)
-        pool = get_unity_connection_pool()
-        instances = pool.discover_all_instances(force_refresh=True)
-        match = next((inst for inst in instances if getattr(inst, "port", None) == port_int), None)
-        if match is None:
-            available = ", ".join(
-                f"{inst.id} (port {getattr(inst, 'port', '?')})" for inst in instances
-            ) or "none"
-            return {
-                "success": False,
-                "error": f"No Unity instance found on port {value}. Available: {available}."
-            }
-        resolved_id = match.id
-        middleware = get_unity_instance_middleware()
-        await middleware.set_active_instance(ctx, resolved_id)
-        return {
-            "success": True,
-            "message": f"Active instance set to {resolved_id}",
-            "data": {
-                "instance": resolved_id,
-                "session_id": getattr(ctx, "session_id", None),
-            },
-        }
-
-    # Discover running instances based on transport
-    if transport == "http":
-        # In remote-hosted mode, filter sessions by user_id
-        user_id = (await ctx.get_state(
-            "user_id")) if config.http_remote_hosted else None
-        sessions_data = await PluginHub.get_sessions(user_id=user_id)
-        sessions = sessions_data.sessions
-        instances = []
-        for session_id, session in sessions.items():
-            project = session.project or "Unknown"
-            hash_value = session.hash
-            if not hash_value:
-                continue
-            inst_id = f"{project}@{hash_value}"
-            instances.append(SimpleNamespace(
-                id=inst_id,
-                hash=hash_value,
-                name=project,
-                session_id=session_id,
-            ))
-    else:
-        pool = get_unity_connection_pool()
-        instances = pool.discover_all_instances(force_refresh=True)
+    # In remote-hosted mode, filter sessions by user_id
+    user_id = (await ctx.get_state(
+        "user_id")) if config.http_remote_hosted else None
+    sessions_data = await PluginHub.get_sessions(user_id=user_id)
+    sessions = sessions_data.sessions
+    instances = []
+    for session_id, session in sessions.items():
+        project = session.project or "Unknown"
+        hash_value = session.hash
+        if not hash_value:
+            continue
+        inst_id = f"{project}@{hash_value}"
+        instances.append(SimpleNamespace(
+            id=inst_id,
+            hash=hash_value,
+            name=project,
+            session_id=session_id,
+        ))
 
     if not instances:
         return {

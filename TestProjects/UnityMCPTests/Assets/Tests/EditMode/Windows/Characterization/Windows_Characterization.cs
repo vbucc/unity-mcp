@@ -199,7 +199,7 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
 
             var examples = new[]
             {
-                "transportDropdown", "httpUrlField", "unityPortField",
+                "transportDropdown", "httpUrlField", "apiKeyField",
                 "statusIndicator", "connectionStatusLabel", "connectionToggleButton"
             };
 
@@ -207,17 +207,16 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
         }
 
         /// <summary>
-        /// Current behavior: McpConnectionSection reads 3+ EditorPrefs in InitializeUI
-        /// (UseHttpTransport, HttpTransportScope, UnitySocketPort).
+        /// Current behavior: McpConnectionSection reads several EditorPrefs in InitializeUI
+        /// (HttpTransportScope, ApiKey).
         /// </summary>
         [Test]
         public void McpConnectionSection_ReadsMultipleEditorPrefs_InInitializeUI()
         {
             var prefKeys = new[]
             {
-                EditorPrefKeys.UseHttpTransport,
                 EditorPrefKeys.HttpTransportScope,
-                EditorPrefKeys.UnitySocketPort
+                EditorPrefKeys.ApiKey
             };
 
             foreach (var key in prefKeys)
@@ -242,14 +241,12 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
 
             var callbackSteps = new[]
             {
-                "1. Get previous and new transport values",
-                "2. Persist UseHttpTransport to EditorPrefs",
-                "3. Persist HttpTransportScope if HTTP",
-                "4. Clear resume flags (ResumeStdioAfterReload in EditorPrefs, HTTP resume key in SessionState)",
-                "5. Update UI visibility",
-                "6. Invoke OnManualConfigUpdateRequested event",
-                "7. Invoke OnTransportChanged event",
-                "8. Stop opposing transport if switching HTTP<->Stdio"
+                "1. Get the new transport scope value",
+                "2. Cancel pending resume/reconnect",
+                "3. Persist HttpTransportScope",
+                "4. Update UI visibility",
+                "5. Invoke OnManualConfigUpdateRequested event",
+                "6. Invoke OnTransportChanged event"
             };
 
             Assert.Pass($"Transport callback flow: {string.Join("; ", callbackSteps)}");
@@ -623,15 +620,15 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
 
         /// <summary>
         /// Current behavior: Conditional display logic for HTTP fields
-        /// based on transport selection (show for HTTP, hide for Stdio).
+        /// based on transport scope (HTTP Local shows the local-server controls).
         /// </summary>
         [Test]
         public void VisibilityLogic_ConditionalDisplay_BasedOnTransportSelection()
         {
             var pattern = new[]
             {
-                "if (isHttpSelected) { httpRows.style.display = Flex; }",
-                "else { httpRows.style.display = None; }",
+                "if (httpLocalSelected) { httpServerControlRow.style.display = Flex; }",
+                "else { httpServerControlRow.style.display = None; }",
                 "Triggered by transport dropdown value change",
                 "UpdateHttpFieldVisibility() method pattern"
             };

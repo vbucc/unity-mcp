@@ -2,21 +2,24 @@
 """Local headless test harness for MCP for Unity.
 
 A single, stdlib-only, cross-platform Python orchestrator that, from one command,
-boots a headless Hub-licensed Unity Editor, reuses the resident route-B stdio
-bridge, runs up to three test legs (bridge smoke + Unity EditMode + Unity
+starts its own MCP server, boots a headless Hub-licensed Unity Editor pointed at
+that server, runs up to three test legs (bridge smoke + Unity EditMode + Unity
 PlayMode over the Unity Test Framework wire protocol), aggregates a JUnit report,
-and tears down. The same entry point is callable from CI so
-``.github/workflows/e2e-bridge.yml`` can collapse its boot/wait/discover/run-smoke
-shell into one invocation.
+and tears down.
 
 Design: ``docs/superpowers/specs/2026-06-07-local-headless-test-harness-design.md``.
 
+Port isolation (why this matters): Unity's StartLocalHttpServer terminates
+whatever process owns the port it is about to bind, and EditorPrefs are shared by
+every project on the machine for a given Unity version. So the harness (a) never
+binds 8080 or ``$UNITY_MCP_HTTP_PORT`` — the ports a developer's everyday server
+uses — and (b) points its Editor at its own server with the ``UNITY_MCP_HTTP_URL``
+environment variable rather than writing the endpoint to EditorPrefs. It starts
+and stops only the server process it spawned itself. A developer can run the
+harness while working, and their live session is untouched.
+
 The pure (filesystem/Unity-free) helpers sit at the top of this module and are
-importable + unit-testable without Unity. The reused server modules
-(``transport.legacy.unity_connection`` / ``transport.legacy.port_discovery``)
-are imported INSIDE the live functions (after prepending ``Server/src`` to
-``sys.path``, mirroring ``Server/tests/e2e/bridge_smoke.py``), so importing this
-module never requires ``Server/src`` on ``sys.path``.
+importable + unit-testable without Unity.
 
 Exit-code contract:
     0  All blocking legs passed. PlayMode non-blocking failures still 0
@@ -25,7 +28,8 @@ Exit-code contract:
        status=="failed"; OR PlayMode failure under --strict-playmode).
     2  Bridge unreachable / setup failure (smoke returncode 2; OR editor
        PID/container died during wait with no license/compile signal; OR the
-       overall watchdog timed out).
+       harness server never became ready; OR a requested --http-port collides
+       with the developer's everyday server; OR the overall watchdog timed out).
     3  Project does not compile (read_console compile probe OR compile_fatal
        log-grep).
     4  No Unity license / Hub seat (license_fatal log-grep after warm-up grace).
@@ -37,8 +41,8 @@ Run locally (against TestProjects/UnityMCPTests, default isolated tmp status dir
     python tools/local_harness.py --legs smoke,editmode,playmode \
         --project-path TestProjects/UnityMCPTests
 
-    # Attach to an already-resident bridge instead of booting one:
-    python tools/local_harness.py --reuse --legs smoke \
+    # Attach to an already-running server + Editor instead of booting one:
+    python tools/local_harness.py --reuse --http-port 8123 --legs smoke \
         --project-path TestProjects/UnityMCPTests
 
     # Point at an arbitrary consumer project with an explicit editor binary:
@@ -48,7 +52,7 @@ Run locally (against TestProjects/UnityMCPTests, default isolated tmp status dir
     # CI parity (DockerLauncher; license threaded as an opaque editor arg):
     python tools/local_harness.py --ci --no-warmup \
         --legs smoke,editmode,playmode \
-        --project-path TestProjects/UnityMCPTests --status-dir .unity-mcp \
+        --project-path TestProjects/UnityMCPTests --log-dir .unity-mcp \
         --editor-arg -manualLicenseFile --editor-arg /root/.../Unity_lic.ulf
 """
 
@@ -67,6 +71,9 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -75,21 +82,19 @@ from typing import Any, Callable
 # ---------------------------------------------------------------------------
 # Repo geometry. This file lives at <repo>/tools/local_harness.py, so the repo
 # root is parents[1] and Server/src is <repo>/Server/src. We compute these once
-# but only mutate sys.path lazily inside the live functions (see _ensure_src_on_path).
 # ---------------------------------------------------------------------------
 _THIS = Path(__file__).resolve()
 REPO_ROOT = _THIS.parents[1]
-SERVER_SRC = REPO_ROOT / "Server" / "src"
 
 DEFAULT_PROJECT_PATH = "TestProjects/UnityMCPTests"
-BOOT_METHOD = "MCPForUnity.Editor.McpCiBoot.StartStdioForCi"
+BOOT_METHOD = "MCPForUnity.Editor.McpCiBoot.StartHttpForCi"
 
-# Socket-release delay before any resident re-launch, matching StdioBridgeHost's
+# Settle delay before any resident re-launch, matching the Editor's
 # own toWait.Wait(2000) for the #688/#692/#1173 Windows TcpListener leak fix.
 SOCKET_RELEASE_MS = 2000
 
 # License-fatal grace: tolerate transient Licensing chatter for this long after
-# boot (matches claude-nl-suite.yml fatal_after = boot_start + 120 s).
+# boot (a license failure inside this window is not yet conclusive).
 LICENSE_GRACE_S = 120
 
 # PlayMode init-timeout (ms). C# default is 15000; 120000 is only a docstring
@@ -124,11 +129,10 @@ class EditorSpec:
 
 @dataclass
 class ReadyInfo:
-    """Result of bridge discovery: the port, the instance id, and the status file."""
+    """Result of bridge discovery: the instance id and the server it registered with."""
 
-    port: int
     instance_id: str
-    status_file: str
+    base_url: str
 
 
 @dataclass
@@ -407,65 +411,84 @@ def discover_editor(version: str,
 
 
 # ===========================================================================
-# Pure helpers: status-file discovery
+# Pure helpers: HTTP server endpoint + port isolation
 # ===========================================================================
-def newest_status_file(status_dir: str | Path,
-                       glob_fn: Callable[[str], list[str]] | None = None,
-                       mtime_fn: Callable[[str], float] | None = None) -> str | None:
-    """Return the path to the newest unity-mcp-status-*.json under status_dir, or None."""
-    pattern = str(Path(status_dir) / "unity-mcp-status-*.json")
-    g = glob_fn or glob.glob
-    files = list(g(pattern))
-    if not files:
-        return None
-    m = mtime_fn or (lambda p: os.path.getmtime(p))
-    try:
-        return max(files, key=m)
-    except OSError:
-        # If stat races a deletion, fall back to lexical newest.
-        return sorted(files)[-1]
+#
+# The harness runs its own MCP server on its own port. Port 8080 is the default
+# for a developer's everyday server, and Unity's StartLocalHttpServer terminates
+# whatever process owns the port it is about to bind — so a harness that reused
+# 8080 would kill a live session. Two rules keep them apart:
+#
+#   1. Never bind a port a developer might be using (see forbidden_ports).
+#   2. Never write the harness endpoint into EditorPrefs, which are shared by
+#      every project on the machine for a given Unity version. The Editor is
+#      pointed at the harness with UNITY_MCP_HTTP_URL instead, which
+#      HttpEndpointUtility.GetLocalBaseUrl() reads ahead of the pref.
+#
+# The harness also starts and stops only the server process it spawned itself;
+# Unity in this mode never starts or stops a server (McpCiBoot.StartHttpForCi
+# opens the outbound WebSocket and nothing else).
+
+DEFAULT_DEV_HTTP_PORT = 8080
 
 
-def instance_id_from_status(status_file: str | Path, data: dict[str, Any] | None = None) -> str:
-    """Derive the <name>@<hash> instance id from a status file path + payload.
+def forbidden_ports(env: dict[str, str] | None = None) -> set[int]:
+    """Ports the harness must never bind: the developer's everyday server."""
+    e = os.environ if env is None else env
+    ports = {DEFAULT_DEV_HTTP_PORT}
+    raw = e.get("UNITY_MCP_HTTP_PORT")
+    if raw:
+        try:
+            ports.add(int(raw))
+        except ValueError:
+            pass
+    url = e.get("UNITY_MCP_HTTP_URL")
+    if url:
+        try:
+            parsed = urllib.parse.urlparse(url)
+            if parsed.port:
+                ports.add(parsed.port)
+        except ValueError:
+            pass
+    return ports
 
-    hash = the filename segment between 'unity-mcp-status-' and '.json'
-    (= sha1(Application.dataPath)[:8]). Glob the newest file rather than
-    recomputing the hash so the harness is robust to /Users vs /private/var
-    symlink canonicalization. name = project root folder name, derived from the
-    status payload's project_path (strip trailing /Assets) when available, else
-    project_name, else "Unknown" — mirroring the C# project_name derivation.
+
+def pick_free_port() -> int:
+    """Bind :0, read the assigned port, release it."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
+def resolve_harness_port(explicit: int | None,
+                         env: dict[str, str] | None = None,
+                         pick: Callable[[], int] | None = None) -> int:
+    """Choose the harness port, refusing to collide with the developer's server.
+
+    Raises SystemExit(2) on an explicit request for a forbidden port — this is a
+    hard stop, not a warning: binding it would take down a live game-dev session.
     """
-    fname = os.path.basename(str(status_file))
-    h = fname
-    if h.startswith("unity-mcp-status-"):
-        h = h[len("unity-mcp-status-"):]
-    if h.endswith(".json"):
-        h = h[: -len(".json")]
+    blocked = forbidden_ports(env)
+    if explicit is not None:
+        if explicit in blocked:
+            print(f"::error:: refusing --http-port {explicit}: that port belongs to your "
+                  f"everyday MCP server. Binding it would stop that server, and the smoke "
+                  f"leg creates and deletes GameObjects in whatever scene is open. Pick "
+                  f"another port, or omit --http-port to let the harness choose a free one.")
+            raise SystemExit(2)
+        return explicit
 
-    name = "Unknown"
-    if data:
-        project_path = data.get("project_path")
-        if isinstance(project_path, str) and project_path:
-            p = project_path.rstrip("/\\")
-            if p.lower().endswith("assets"):
-                p = p[:-6].rstrip("/\\")
-            base = os.path.basename(p)
-            if base:
-                name = base
-        if name == "Unknown":
-            pn = data.get("project_name")
-            if isinstance(pn, str) and pn:
-                name = pn
-    return f"{name}@{h}"
+    chooser = pick or pick_free_port
+    for _ in range(20):
+        candidate = chooser()
+        if candidate not in blocked:
+            return candidate
+    print("::error:: could not find a free port outside the reserved set")
+    raise SystemExit(2)
 
 
-def port_from_status(data: dict[str, Any] | None) -> int | None:
-    """Extract unity_port from a status payload, or None."""
-    if not isinstance(data, dict):
-        return None
-    port = data.get("unity_port")
-    return port if isinstance(port, int) else None
+def harness_base_url(port: int) -> str:
+    return f"http://127.0.0.1:{port}"
 
 
 # ===========================================================================
@@ -670,8 +693,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--editor", default=None, help="Explicit Unity binary (discovery precedence 1).")
     p.add_argument("--unity-version", default=None, help="Override the resolved Unity version.")
     p.add_argument("--ci", action="store_true", help="Use DockerLauncher + repo .unity-mcp status dir; implies --no-warmup semantics.")
-    p.add_argument("--status-dir", default=None, help="Status-file directory. Default: fresh tmp dir (local) / <workspace>/.unity-mcp (--ci).")
-    p.add_argument("--reuse", action="store_true", help="Attach to an already-resident bridge via ~/.unity-mcp; owns_editor=False.")
+    p.add_argument("--log-dir", default=None, help="Directory for editor/server logs. Default: fresh tmp dir (local) / <workspace>/.unity-mcp (--ci).")
+    p.add_argument("--http-port", type=int, default=None,
+                   help="Port for the harness's own MCP server. Default: a free ephemeral port. "
+                        "Never 8080 (or $UNITY_MCP_HTTP_PORT) — those belong to your everyday "
+                        "server and binding one would take it down. Required with --reuse.")
+    p.add_argument("--reuse", action="store_true", help="Attach to an already-running server + Unity instance (requires --http-port); owns_editor=False.")
     p.add_argument("--keep-alive", action="store_true", help="Leave the editor running after legs (no teardown of an owned editor).")
     p.add_argument("--no-warmup", action="store_true", help="Skip the warm-up phase.")
     p.add_argument("--strict-playmode", action="store_true", help="Promote a PlayMode failure to a blocking failure (exit 1).")
@@ -772,10 +799,19 @@ class LocalLauncher:
         ]
 
     @staticmethod
-    def resident_env(base_env: dict[str, str], status_dir: Path) -> dict[str, str]:
+    def resident_env(base_env: dict[str, str], base_url: str) -> dict[str, str]:
+        """Env for the harness-owned Editor.
+
+        UNITY_MCP_HTTP_URL is a per-process override read ahead of the shared
+        EditorPref, so this Editor talks to the harness server while the
+        developer's own Editor keeps its configured endpoint.
+
+        Deliberately does NOT set UNITY_MCP_ALLOW_BATCH: that flag is what lets a
+        batch Editor call StartLocalHttpServer, which terminates whatever owns
+        the target port. The harness owns its server; Unity must not touch it.
+        """
         env = dict(base_env)
-        env["UNITY_MCP_ALLOW_BATCH"] = "1"
-        env["UNITY_MCP_STATUS_DIR"] = str(status_dir)
+        env["UNITY_MCP_HTTP_URL"] = base_url
         return env
 
     def warmup(self, editor: str, project_path: Path, log_path: Path, timeout_s: int) -> int:
@@ -788,10 +824,10 @@ class LocalLauncher:
             proc.wait()
             return -1
 
-    def launch(self, editor: str, project_path: Path, status_dir: Path, log_path: Path,
+    def launch(self, editor: str, project_path: Path, base_url: str, log_path: Path,
                extra_editor_args: list[str]) -> Handle:
         argv = self.resident_argv(editor, project_path, log_path, extra_editor_args)
-        env = self.resident_env(os.environ, status_dir)
+        env = self.resident_env(os.environ, base_url)
         kwargs: dict[str, Any] = {"env": env}
         if hasattr(os, "setsid"):
             kwargs["start_new_session"] = True
@@ -820,7 +856,7 @@ class LocalLauncher:
         except OSError:
             return ""
 
-    def fixup_permissions(self, status_dir: Path) -> None:
+    def fixup_permissions(self, log_dir: Path) -> None:
         return  # local: no-op
 
     def teardown(self, handle: Handle, grace_s: float = 10.0) -> None:
@@ -854,7 +890,7 @@ class LocalLauncher:
 
 
 class DockerLauncher:
-    """Reproduces e2e-bridge.yml's docker run exactly; docker-based liveness."""
+    """Docker-based launcher for containerized CI; docker-based liveness."""
 
     CONTAINER = "unity-mcp"
 
@@ -866,7 +902,7 @@ class DockerLauncher:
         return EditorSpec(binary="/opt/unity/Editor/Unity", version=self.args.unity_version or "docker")
 
     @staticmethod
-    def docker_run_argv(image: str, workspace: Path, project_path: Path, status_dir: Path,
+    def docker_run_argv(image: str, workspace: Path, project_path: Path, base_url: str,
                         log_path: str, extra_editor_args: list[str],
                         container: str = "unity-mcp",
                         runner_temp: str | None = None) -> list[str]:
@@ -885,9 +921,7 @@ class DockerLauncher:
         return [
             "docker", "run", "-d", "--name", container, "--network", "host",
             "-e", "HOME=/root",
-            "-e", "UNITY_MCP_ALLOW_BATCH=1",
-            "-e", f"UNITY_MCP_STATUS_DIR={status_dir}",
-            "-e", "UNITY_MCP_BIND_HOST=127.0.0.1",
+            "-e", f"UNITY_MCP_HTTP_URL={base_url}",
             "-v", f"{workspace}:{workspace}", "-w", str(workspace),
             *license_mounts,
             image,
@@ -901,7 +935,7 @@ class DockerLauncher:
     def warmup(self, editor: str, project_path: Path, log_path: Path, timeout_s: int) -> int:
         return 0  # no-op in CI (YAML already warmed up)
 
-    def launch(self, editor: str, project_path: Path, status_dir: Path, log_path: Path,
+    def launch(self, editor: str, project_path: Path, base_url: str, log_path: Path,
                extra_editor_args: list[str]) -> Handle:
         image = os.environ.get("UNITY_IMAGE", "")
         workspace = Path(os.environ.get("GITHUB_WORKSPACE", str(REPO_ROOT)))
@@ -909,7 +943,7 @@ class DockerLauncher:
         container_log = "/root/.config/unity3d/Editor.log"
         subprocess.run(["docker", "rm", "-f", self.CONTAINER],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-        argv = self.docker_run_argv(image, workspace, project_path, status_dir,
+        argv = self.docker_run_argv(image, workspace, project_path, base_url,
                                      container_log, extra_editor_args, self.CONTAINER,
                                      runner_temp)
         subprocess.run(argv, check=True)
@@ -935,8 +969,8 @@ class DockerLauncher:
         except OSError:
             return ""
 
-    def fixup_permissions(self, status_dir: Path) -> None:
-        subprocess.run(["docker", "exec", self.CONTAINER, "chmod", "-R", "a+rwx", str(status_dir)],
+    def fixup_permissions(self, log_dir: Path) -> None:
+        subprocess.run(["docker", "exec", self.CONTAINER, "chmod", "-R", "a+rwx", str(log_dir)],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 
     def teardown(self, handle: Handle, grace_s: float = 10.0) -> None:
@@ -951,35 +985,214 @@ def make_launcher(args: argparse.Namespace):
 # ===========================================================================
 # Live functions (Unity-touching; guarded under main()).
 # ===========================================================================
-def _ensure_src_on_path() -> None:
-    """Prepend <repo>/Server/src to sys.path (mirrors bridge_smoke.py)."""
-    src = str(SERVER_SRC)
-    if SERVER_SRC.is_dir() and src not in sys.path:
-        sys.path.insert(0, src)
 
 
-def _read_status(status_file: str) -> dict[str, Any] | None:
+def _http_post_json(url: str, payload: dict[str, Any], timeout: float) -> Any:
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _http_get_json(url: str, timeout: float) -> Any:
+    with urllib.request.urlopen(url, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def http_health(base_url: str, timeout: float = 1.0) -> bool:
+    """True when the harness's own server answers /health."""
     try:
-        with open(status_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return None
-
-
-def _tcp_probe(port: int, timeout: float = 0.5) -> bool:
-    try:
-        with socket.create_connection(("127.0.0.1", int(port)), timeout):
-            return True
-    except OSError:
+        _http_get_json(f"{base_url}/health", timeout)
+        return True
+    except (urllib.error.URLError, OSError, ValueError):
         return False
 
 
-def wait_for_ready(launcher, handle: Handle, status_dir: Path, bridge_wait_s: int,
-                   boot_start: float, deadline: float) -> ReadyInfo:
-    """Poll status-file discovery + TCP probe up to bridge_wait_s.
+def http_instances(base_url: str, timeout: float = 5.0) -> list[dict[str, Any]]:
+    """Unity instances currently registered with the harness's server."""
+    try:
+        data = _http_get_json(f"{base_url}/api/instances", timeout)
+    except (urllib.error.URLError, OSError, ValueError):
+        return []
+    if isinstance(data, dict):
+        instances = data.get("instances")
+        if isinstance(instances, list):
+            return [i for i in instances if isinstance(i, dict)]
+    return []
+
+
+def _unwrap_envelope(resp: Any) -> Any:
+    """Strip the ``/api/command`` transport envelope down to Unity's payload.
+
+    The route answers ``{"status": "success", "result": {...}}``. That outer
+    ``status`` collides with the job status the UTF legs poll for: ``_dig`` walks
+    the whole response and would return the envelope's "success" forever instead
+    of the inner "running"/"succeeded"/"failed". The legacy transport handed
+    callers the unwrapped payload, so do the same here.
+    """
+    if (isinstance(resp, dict) and "status" in resp and "result" in resp
+            and isinstance(resp["result"], dict)):
+        return resp["result"]
+    return resp
+
+
+def _is_reloading(resp: Any) -> bool:
+    """True when Unity rejected a command because it is reloading."""
+    if not isinstance(resp, dict):
+        return False
+    if resp.get("state") == "reloading":
+        return True
+    reason = _dig(resp, "reason")
+    if isinstance(reason, str) and reason.lower() == "reloading":
+        return True
+    text = f"{resp.get('message') or ''} {resp.get('error') or ''}".lower()
+    return "reload" in text
+
+
+def make_sender(base_url: str, timeout: float = 300.0) -> Callable[..., Any]:
+    """Build the send(command, params, instance_id=..., ...) used by every leg.
+
+    Mirrors the legacy signature so the UTF state machines take it unchanged.
+
+    Retries here rather than relying on the server: ``/api/command`` routes to
+    ``PluginHub.send_command``, which is the low-level send and does *not* carry
+    the reload-retry wrapper that ``send_command_for_instance`` gives MCP tools.
+    Running the EditMode/PlayMode suites triggers domain reloads that drop the
+    WebSocket mid-flight, so the harness owns this resilience itself.
+    """
+    def send(command_type: str, params: dict[str, Any], *,
+             instance_id: str | None = None,
+             max_retries: int = 0, retry_ms: int = 250,
+             retry_on_reload: bool = True, **_ignored: Any) -> Any:
+        payload: dict[str, Any] = {"type": command_type, "params": params or {}}
+        if instance_id:
+            payload["unity_instance"] = instance_id
+
+        attempts = max(0, int(max_retries)) + 1
+        delay = max(0.0, float(retry_ms) / 1000.0)
+        last_exc: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                resp = _http_post_json(f"{base_url}/api/command", payload, timeout)
+            except (urllib.error.URLError, OSError, ValueError) as exc:
+                last_exc = exc
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(delay)
+                continue
+            resp = _unwrap_envelope(resp)
+            if retry_on_reload and attempt < attempts - 1 and _is_reloading(resp):
+                time.sleep(delay)
+                continue
+            return resp
+        if last_exc is not None:
+            raise last_exc
+        return resp
+
+    return send
+
+
+class HarnessServer:
+    """The MCP server process the harness owns, on its own port.
+
+    Only ever terminates the PID it spawned. A server the harness did not start
+    (``--reuse``) is left completely alone.
+    """
+
+    def __init__(self, port: int, log_path: Path):
+        self.port = port
+        self.base_url = harness_base_url(port)
+        self.log_path = log_path
+        self.proc: subprocess.Popen | None = None
+
+    def start(self, wait_s: int = 120) -> None:
+        argv = [
+            "uv", "run", "mcp-for-unity",
+            "--transport", "http",
+            "--http-port", str(self.port),
+            "--http-host", "127.0.0.1",
+        ]
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        log = open(self.log_path, "wb")
+        print(f"[harness] starting MCP server on {self.base_url}")
+        self.proc = subprocess.Popen(
+            argv, cwd=str(REPO_ROOT / "Server"),
+            stdout=log, stderr=subprocess.STDOUT,
+            env={**os.environ, "UNITY_MCP_HTTP_PORT": str(self.port)},
+        )
+
+        deadline = time.time() + wait_s
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                print(f"::error:: MCP server exited during startup (rc={self.proc.returncode})")
+                print(_tail_file(self.log_path, 60))
+                raise SystemExit(2)
+            if http_health(self.base_url):
+                print(f"[harness] server ready on {self.base_url}")
+                return
+            time.sleep(0.5)
+
+        print(f"::error:: MCP server did not become ready on {self.base_url} within {wait_s}s")
+        print(_tail_file(self.log_path, 60))
+        self.stop()
+        raise SystemExit(2)
+
+    def stop(self) -> None:
+        if self.proc is None or self.proc.poll() is not None:
+            return
+        try:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait(timeout=5)
+        except OSError:
+            pass
+        finally:
+            self.proc = None
+
+
+def _tail_file(path: Path, n: int) -> str:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    return "\n".join(lines[-n:])
+
+
+def _instance_id(inst: dict[str, Any]) -> str | None:
+    """Build the Name@hash id from an /api/instances row.
+
+    The route reports ``project`` + ``hash`` (see main.py cli_instances_route);
+    the id every tool takes is the two joined.
+    """
+    project = inst.get("project")
+    hash_value = inst.get("hash")
+    if project and hash_value:
+        return f"{project}@{hash_value}"
+    return None
+
+
+def _match_instance(instances: list[dict[str, Any]], project_path: Path) -> str | None:
+    """Pick the instance id for project_path, or the sole instance if unambiguous."""
+    want = os.path.basename(str(project_path).rstrip("/\\"))
+    for inst in instances:
+        if inst.get("project") == want:
+            return _instance_id(inst)
+    if len(instances) == 1:
+        return _instance_id(instances[0])
+    return None
+
+
+def wait_for_ready(launcher, handle: Handle, base_url: str, project_path: Path,
+                   bridge_wait_s: int, boot_start: float, deadline: float,
+                   log_dir: Path) -> ReadyInfo:
+    """Poll /api/instances until the Editor registers with the harness server.
 
     Liveness (launcher.is_alive) is the authoritative death signal: a slow-but-
-    healthy cold boot may show zero discoverable instances for a while, which is
+    healthy cold boot may show zero registered instances for a while, which is
     tolerated. On editor death, classify the log tail -> raise SystemExit with
     the mapped exit code (4 license / 3 compile / else 2). On overall watchdog
     expiry -> SystemExit(2).
@@ -1007,16 +1220,30 @@ def wait_for_ready(launcher, handle: Handle, status_dir: Path, bridge_wait_s: in
                 raise SystemExit(3)
             raise SystemExit(2)
 
-        status_file = newest_status_file(status_dir)
-        if status_file:
-            data = _read_status(status_file)
-            port = port_from_status(data)
-            if port and _tcp_probe(port):
-                instance_id = instance_id_from_status(status_file, data)
-                launcher.fixup_permissions(status_dir)
-                return ReadyInfo(port=port, instance_id=instance_id, status_file=status_file)
+        instance_id = _match_instance(http_instances(base_url), project_path)
+        if instance_id and _unity_responds(base_url, instance_id):
+            launcher.fixup_permissions(log_dir)
+            return ReadyInfo(instance_id=instance_id, base_url=base_url)
 
         time.sleep(2)
+
+
+def _unity_responds(base_url: str, instance_id: str) -> bool:
+    """True once Unity actually answers a command, not merely registers.
+
+    Registering the WebSocket only proves the Editor booted far enough to dial
+    out. A cold batch-mode Editor is still importing and compiling for a while
+    after that, and PluginHub fast-fails cheap commands after 2s — so starting a
+    leg on registration alone races the first import. Poll a read-only command
+    until it succeeds.
+    """
+    try:
+        resp = make_sender(base_url, timeout=30.0)(
+            "get_editor_state", {}, instance_id=instance_id)
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+    # /api/command returns Unity's raw envelope, so use the shape-tolerant check.
+    return _ok(resp)
 
 
 def _redacted_tail(launcher, handle: Handle, n: int = 200) -> None:
@@ -1046,18 +1273,18 @@ def _console_entries(resp: Any) -> list[Any]:
     return []
 
 
-def compile_probe(instance_id: str, max_retries: int, retry_ms: int, send=None) -> bool:
+def compile_probe(instance_id: str, max_retries: int, retry_ms: int,
+                  base_url: str | None = None, send=None) -> bool:
     """Run a read-only read_console probe before any UTF leg.
 
     Returns True if the project compiles (no `error CS\\d`), False if a compile
     error is detected. Driving raw run_tests bypasses the Python preflight()
     that would otherwise hang on a non-compiling project, so this probe guards
     the UTF legs explicitly. ``send`` is an injection seam for tests; in
-    production it defaults to the real bridge wire.
+    production it defaults to an HTTP sender bound to ``base_url``.
     """
     if send is None:
-        _ensure_src_on_path()
-        from transport.legacy.unity_connection import send_command_with_retry as send
+        send = make_sender(base_url or "")
 
     try:
         resp = send(
@@ -1089,7 +1316,8 @@ def compile_probe(instance_id: str, max_retries: int, retry_ms: int, send=None) 
 
 
 def run_smoke_leg(instance_id: str, junit_path: Path, max_retries: int, retry_ms: int,
-                  deadline: float | None = None, python_exe: str | None = None) -> LegOutcome:
+                  base_url: str = "", deadline: float | None = None,
+                  python_exe: str | None = None) -> LegOutcome:
     """Run bridge_smoke.py as a subprocess; honor its 0/1/2 exit contract.
 
     Bounded by the overall deadline so a wedged smoke run cannot outlive the
@@ -1100,7 +1328,8 @@ def run_smoke_leg(instance_id: str, junit_path: Path, max_retries: int, retry_ms
     smoke = REPO_ROOT / "Server" / "tests" / "e2e" / "bridge_smoke.py"
     py = python_exe or sys.executable
     argv = [py, str(smoke), "--instance", instance_id, "--junit", str(junit_path),
-            "--max-retries", str(max_retries), "--retry-ms", str(retry_ms)]
+            "--max-retries", str(max_retries), "--retry-ms", str(retry_ms),
+            "--base-url", base_url]
     timeout = max(1.0, deadline - time.time()) if deadline is not None else None
     try:
         rc = subprocess.run(argv, check=False, timeout=timeout).returncode
@@ -1248,10 +1477,10 @@ def _outcome_from_terminal(name: str, mode: str, terminal: dict[str, Any] | Any,
 
 
 def run_utf_leg(mode: str, instance_id: str, blocking: bool, deadline: float,
-                max_retries: int, retry_ms: int, init_timeout_ms: int | None = None) -> LegOutcome:
+                max_retries: int, retry_ms: int, base_url: str,
+                init_timeout_ms: int | None = None) -> LegOutcome:
     """Drive one EditMode/PlayMode leg over the raw run_tests/get_test_job wire."""
-    _ensure_src_on_path()
-    from transport.legacy.unity_connection import send_command_with_retry as send
+    send = make_sender(base_url)
 
     name = "editmode" if mode == "EditMode" else "playmode"
     job_id, start = _start_utf(send, mode, instance_id, init_timeout_ms, max_retries, retry_ms)
@@ -1281,7 +1510,7 @@ def _ensure_clean_editmode(send, instance_id: str, max_retries: int, retry_ms: i
 
 
 def run_playmode_with_retry(instance_id: str, deadline: float, max_retries: int, retry_ms: int,
-                            init_timeout_ms: int, strict: bool,
+                            init_timeout_ms: int, strict: bool, base_url: str,
                             relaunch: Callable[[], str] | None = None) -> LegOutcome:
     """PlayMode state machine: start, poll, classify-can-rerun, retry ONCE.
 
@@ -1290,8 +1519,7 @@ def run_playmode_with_retry(instance_id: str, deadline: float, max_retries: int,
     re-establish clean EditMode and repeat once. A wedge may relaunch the editor
     (honoring the socket-release delay) before the single retry.
     """
-    _ensure_src_on_path()
-    from transport.legacy.unity_connection import send_command_with_retry as send
+    send = make_sender(base_url)
 
     blocking = bool(strict)
 
@@ -1383,21 +1611,30 @@ def main(argv: list[str] | None = None) -> int:
         junit_path = (REPO_ROOT / junit_path).resolve()
     reports_dir = Path(args.reports).resolve() if args.reports else junit_path.parent
 
-    # Status-dir + isolation. Default local: fresh tmp dir; --ci / --status-dir override.
-    owns_status_dir = False
-    if args.status_dir:
-        sd = Path(args.status_dir)
-        status_dir = sd if sd.is_absolute() else (REPO_ROOT / sd).resolve()
-        status_dir.mkdir(parents=True, exist_ok=True)
+    # Log dir. Default local: fresh tmp dir; --ci / --log-dir override.
+    owns_log_dir = False
+    if args.log_dir:
+        ld = Path(args.log_dir)
+        log_dir = ld if ld.is_absolute() else (REPO_ROOT / ld).resolve()
+        log_dir.mkdir(parents=True, exist_ok=True)
     elif args.ci:
-        status_dir = (REPO_ROOT / ".unity-mcp").resolve()
-        status_dir.mkdir(parents=True, exist_ok=True)
-    elif args.reuse:
-        status_dir = Path.home() / ".unity-mcp"
+        log_dir = (REPO_ROOT / ".unity-mcp").resolve()
+        log_dir.mkdir(parents=True, exist_ok=True)
     else:
-        status_dir = Path(tempfile.mkdtemp(prefix="unity-mcp-harness-"))
-        owns_status_dir = True
+        log_dir = Path(tempfile.mkdtemp(prefix="unity-mcp-harness-"))
+        owns_log_dir = True
 
+    # Port isolation: never bind the developer's everyday server (see
+    # forbidden_ports). --reuse attaches to a server the harness did not start,
+    # so it must be told which port explicitly.
+    if args.reuse and args.http_port is None:
+        print("::error:: --reuse requires --http-port (the port of the server "
+              "the Unity instance is already connected to)")
+        return 2
+    http_port = resolve_harness_port(args.http_port)
+    base_url = harness_base_url(http_port)
+
+    server: HarnessServer | None = None
     launcher = make_launcher(args)
     boot_start = time.time()
     deadline = boot_start + args.overall_timeout
@@ -1407,20 +1644,21 @@ def main(argv: list[str] | None = None) -> int:
     outcomes: list[LegOutcome] = []
 
     def do_teardown() -> None:
-        # Only kill the editor we started; clean only our own status files.
+        # Only ever kill what we started: the editor we launched and the server
+        # we spawned. A --reuse server belongs to someone else.
         if handle is not None and owns_editor and not args.keep_alive:
             try:
                 launcher.teardown(handle)
             except Exception:
                 pass
-        if owns_status_dir:
+        if server is not None and not args.keep_alive:
             try:
-                for p in glob.glob(str(status_dir / "unity-mcp-status-*.json")):
-                    try:
-                        os.remove(p)
-                    except OSError:
-                        pass
-                shutil.rmtree(status_dir, ignore_errors=True)
+                server.stop()
+            except Exception:
+                pass
+        if owns_log_dir:
+            try:
+                shutil.rmtree(log_dir, ignore_errors=True)
             except OSError:
                 pass
 
@@ -1454,26 +1692,17 @@ def main(argv: list[str] | None = None) -> int:
     threading.Thread(target=_watchdog, name="harness-watchdog", daemon=True).start()
 
     try:
-        # --- Reuse path: attach to a resident bridge via ~/.unity-mcp ---
+        # --- Reuse path: attach to an already-running server + Unity instance ---
         if args.reuse:
-            # Read the user's default registry without our own STATUS_DIR override.
-            prev = os.environ.pop("UNITY_MCP_STATUS_DIR", None)
-            try:
-                status_file = _find_reuse_status(status_dir, project_path)
-            finally:
-                if prev is not None:
-                    os.environ["UNITY_MCP_STATUS_DIR"] = prev
-            if not status_file:
-                print(f"::error:: --reuse: no resident bridge found for {project_path} under {status_dir}")
+            if not http_health(base_url):
+                print(f"::error:: --reuse: no MCP server answering at {base_url}")
                 return 2
-            data = _read_status(status_file)
-            port = port_from_status(data)
-            if not port or not _tcp_probe(port):
-                print(f"::error:: --reuse: resident bridge for {project_path} is not reachable")
+            instance_id = _match_instance(http_instances(base_url), project_path)
+            if not instance_id:
+                print(f"::error:: --reuse: no Unity instance for {project_path} "
+                      f"registered with {base_url}")
                 return 2
-            os.environ["UNITY_MCP_STATUS_DIR"] = str(status_dir)
-            instance_id = instance_id_from_status(status_file, data)
-            ready = ReadyInfo(port=port, instance_id=instance_id, status_file=status_file)
+            ready = ReadyInfo(instance_id=instance_id, base_url=base_url)
         else:
             # --- Boot path ---
             try:
@@ -1488,11 +1717,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  install a matching {maj_min}.x editor or pass --editor (wanted {want})")
                 return 5
 
-            os.environ["UNITY_MCP_STATUS_DIR"] = str(status_dir)
-
             # Phase 1 -- warm-up (skip with --no-warmup / --ci).
             if not args.no_warmup:
-                warmup_log = status_dir / "warmup.log"
+                warmup_log = log_dir / "warmup.log"
                 rc = launcher.warmup(spec.binary, project_path, warmup_log, args.boot_timeout)
                 if rc not in (0,):
                     tail = launcher.tail_log(Handle(log_path=str(warmup_log)), 200)
@@ -1505,28 +1732,33 @@ def main(argv: list[str] | None = None) -> int:
                         return 3
                     # Non-zero warm-up without a clear signal: continue to resident boot.
 
-            # Phase 2 -- resident (NO -quit).
-            editor_log = status_dir / "editor.log"
-            handle = launcher.launch(spec.binary, project_path, status_dir, editor_log, args.editor_args)
-            ready = wait_for_ready(launcher, handle, status_dir, args.bridge_wait, boot_start, deadline)
+            # Phase 2 -- the harness's own MCP server, then the resident editor.
+            server = HarnessServer(http_port, log_dir / "mcp-server.log")
+            server.start()
+
+            # Resident editor (NO -quit); env-pointed at our server, never the pref.
+            editor_log = log_dir / "editor.log"
+            handle = launcher.launch(spec.binary, project_path, base_url, editor_log, args.editor_args)
+            ready = wait_for_ready(launcher, handle, base_url, project_path,
+                                   args.bridge_wait, boot_start, deadline, log_dir)
             instance_id = ready.instance_id
 
         # Pin the instance so smoke + UTF target our own editor.
         os.environ["UNITY_MCP_DEFAULT_INSTANCE"] = instance_id
-        print(f"== bridge ready: instance={instance_id} port={ready.port} ==")
+        print(f"== bridge ready: instance={instance_id} server={ready.base_url} ==")
 
         # --- Compile probe before any UTF leg (exit 3 on compile failure) ---
         wants_utf = ("editmode" in legs) or ("playmode" in legs)
         compile_ok = True
         if wants_utf:
-            compile_ok = compile_probe(instance_id, args.max_retries, args.retry_ms)
+            compile_ok = compile_probe(instance_id, args.max_retries, args.retry_ms, base_url)
             if not compile_ok:
                 print("::error:: project does not compile -- skipping UTF legs")
 
         # --- Smoke leg ---
         if "smoke" in legs:
             outcomes.append(run_smoke_leg(instance_id, junit_path, args.max_retries,
-                                          args.retry_ms, deadline=deadline))
+                                          args.retry_ms, base_url, deadline=deadline))
 
         # --- EditMode leg ---
         if "editmode" in legs:
@@ -1536,7 +1768,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 outcomes.append(run_utf_leg("EditMode", instance_id, blocking=True,
                                             deadline=deadline, max_retries=args.max_retries,
-                                            retry_ms=args.retry_ms))
+                                            retry_ms=args.retry_ms, base_url=base_url))
 
         # --- PlayMode leg (default-ON, NON-BLOCKING unless --strict-playmode) ---
         if "playmode" in legs:
@@ -1549,9 +1781,10 @@ def main(argv: list[str] | None = None) -> int:
                     if handle is not None and owns_editor:
                         launcher.teardown(handle)
                     time.sleep(SOCKET_RELEASE_MS / 1000.0)
-                    editor_log = status_dir / "editor.log"
-                    handle = launcher.launch(spec.binary, project_path, status_dir, editor_log, args.editor_args)
-                    ready = wait_for_ready(launcher, handle, status_dir, args.bridge_wait, time.time(), deadline)
+                    editor_log = log_dir / "editor.log"
+                    handle = launcher.launch(spec.binary, project_path, base_url, editor_log, args.editor_args)
+                    ready = wait_for_ready(launcher, handle, base_url, project_path,
+                                           args.bridge_wait, time.time(), deadline, log_dir)
                     instance_id = ready.instance_id
                     os.environ["UNITY_MCP_DEFAULT_INSTANCE"] = instance_id
                     return instance_id
@@ -1559,7 +1792,8 @@ def main(argv: list[str] | None = None) -> int:
                 relaunch = _relaunch if (owns_editor and not args.reuse) else None
                 outcomes.append(run_playmode_with_retry(
                     instance_id, deadline, args.max_retries, args.retry_ms,
-                    args.playmode_init_timeout, bool(args.strict_playmode), relaunch=relaunch))
+                    args.playmode_init_timeout, bool(args.strict_playmode), base_url,
+                    relaunch=relaunch))
 
         # Aggregate + write reports.
         write_reports(junit_path, reports_dir, outcomes)
@@ -1582,28 +1816,6 @@ def _norm_project_root(p: str) -> str:
         p = p[:-6].rstrip("/\\")
     return os.path.normcase(os.path.normpath(p))
 
-
-def _find_reuse_status(status_dir: Path, project_path: Path) -> str | None:
-    """Find a status file under status_dir whose project root matches project_path.
-
-    Matches on the full normalized project root (not just the leaf folder name) so
-    two projects sharing a folder name never attach to the wrong resident editor.
-    Refuses (returns None) rather than attach to a non-matching instance.
-    """
-    want = _norm_project_root(str(project_path))
-    files = sorted(
-        glob.glob(str(status_dir / "unity-mcp-status-*.json")),
-        key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
-        reverse=True,
-    )
-    for f in files:
-        data = _read_status(f)
-        if not data:
-            continue
-        pp = data.get("project_path") or ""
-        if isinstance(pp, str) and pp and _norm_project_root(pp) == want:
-            return f
-    return None  # refuse rather than attach to a non-matching instance
 
 
 if __name__ == "__main__":

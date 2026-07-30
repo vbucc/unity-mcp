@@ -383,12 +383,8 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
             // Capture ALL main-thread-only values before async task
             string projectDir = ClaudeCliMcpConfigurator.GetClientProjectDir();
-            bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
             string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
             string httpUrl = HttpEndpointUtility.GetMcpRpcUrl();
-            var (uvxPath, _, packageName) = AssetPathUtility.GetUvxCommandParts();
-            string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
-            string uvxDevFlags = AssetPathUtility.GetUvxDevFlags();
             string apiKey = EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty);
 
             // Compute pathPrepend on main thread
@@ -414,9 +410,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                         var serverTransport = HttpEndpointUtility.GetCurrentServerTransport();
                         cliConfigurator.ConfigureWithCapturedValues(
                             projectDir, claudePath, pathPrepend,
-                            useHttpTransport, httpUrl,
-                            uvxPath, fromArgs, packageName, uvxDevFlags,
-                            apiKey, serverTransport);
+                            httpUrl, apiKey, serverTransport);
                     }
                     return (success: true, error: (string)null);
                 }
@@ -654,7 +648,6 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
 
                 // Capture main-thread-only values before async task
                 string projectDir = ClaudeCliMcpConfigurator.GetClientProjectDir();
-                bool useHttpTransport = EditorConfigurationCache.Instance.UseHttpTransport;
                 string claudePath = MCPServiceLocator.Paths.GetClaudeCliPath();
                 RuntimePlatform platform = Application.platform;
                 bool isRemoteScope = HttpEndpointUtility.IsRemoteScope();
@@ -669,7 +662,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                     if (client is ClaudeCliMcpConfigurator claudeConfigurator)
                     {
                         // Use thread-safe version with captured main-thread values
-                        claudeConfigurator.CheckStatusWithProjectDir(projectDir, useHttpTransport, claudePath, platform, isRemoteScope, expectedPackageSource, attemptAutoRewrite: false, hasProjectDirOverride: hasProjectDirOverride);
+                        claudeConfigurator.CheckStatusWithProjectDir(projectDir, claudePath, platform, isRemoteScope, expectedPackageSource, attemptAutoRewrite: false, hasProjectDirOverride: hasProjectDirOverride);
                     }
                 }).ContinueWith(t =>
                 {
@@ -731,7 +724,7 @@ namespace MCPForUnity.Editor.Windows.Components.ClientConfig
                 return;
             }
 
-            // Check for transport mismatch (3-way: Stdio, Http, HttpRemote).
+            // Check for transport mismatch (Http vs HttpRemote).
             // Skip when a project dir override is active — the registered transport
             // in the overridden project may legitimately differ from the local server.
             bool hasTransportMismatch = false;

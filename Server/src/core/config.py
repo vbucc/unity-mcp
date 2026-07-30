@@ -10,14 +10,6 @@ from dataclasses import dataclass
 class ServerConfig:
     """Main configuration class for the MCP server."""
 
-    # Network settings
-    unity_host: str = "127.0.0.1"
-    unity_port: int = 6400
-    mcp_port: int = 6500
-
-    # Transport settings
-    transport_mode: str = "stdio"
-
     # HTTP transport behaviour
     http_remote_hosted: bool = False
 
@@ -30,34 +22,9 @@ class ServerConfig:
     api_key_service_token_header: str | None = None  # e.g. "X-Service-Token"
     api_key_service_token: str | None = None         # The token value
 
-    # Connection settings
-    connection_timeout: float = 30.0
-    # Hard ceiling on a command's total time across all retries (wedged-socket guard).
-    command_total_timeout: float = 90.0
-    buffer_size: int = 16 * 1024 * 1024  # 16MB buffer
-
-    # STDIO framing behaviour
-    require_framing: bool = True
-    handshake_timeout: float = 1.0
-    framed_receive_timeout: float = 2.0
-    max_heartbeat_frames: int = 16
-    heartbeat_timeout: float = 2.0
-
     # Logging settings
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-    # Server settings
-    max_retries: int = 5
-    retry_delay: float = 0.25
-    # Backoff hint returned to clients when Unity is reloading (milliseconds)
-    reload_retry_ms: int = 250
-    # Number of polite retries when Unity reports reloading
-    # 40 × 250ms ≈ 10s default window
-    reload_max_retries: int = 40
-
-    # Port discovery cache
-    port_registry_ttl: float = 5.0
 
     # Telemetry settings
     telemetry_enabled: bool = True

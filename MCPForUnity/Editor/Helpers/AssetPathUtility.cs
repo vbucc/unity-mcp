@@ -306,7 +306,7 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Builds the uvx package source arguments for the MCP server.
         /// Handles prerelease package mode (prerelease from PyPI) vs stable mode (pinned version or override).
-        /// Centralizes the prerelease logic to avoid duplication between HTTP and stdio transports.
+        /// Centralizes the prerelease logic so every caller resolves the same package source.
         /// Priority: explicit fromUrl override > package-version-driven prerelease mode > stable pinned package.
         /// NOTE: This overload reads from EditorPrefs/cache and MUST be called from the main thread.
         /// For background threads, use the overload that accepts pre-captured parameters.

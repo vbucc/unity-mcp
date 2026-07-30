@@ -9,7 +9,6 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.utils import coerce_bool, parse_json_payload
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
 
 BuildAction = Literal[
     "build", "status", "platform", "settings", "list_settings",
@@ -25,7 +24,7 @@ async def _send_build_command(
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
     result = await send_with_unity_instance(
-        async_send_command_with_retry, unity_instance, "manage_build", params_dict
+        unity_instance, "manage_build", params_dict
     )
     return result if isinstance(result, dict) else {"success": False, "message": str(result)}
 

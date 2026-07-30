@@ -10,7 +10,7 @@ from services.tools.manage_vfx import manage_vfx
 def test_manage_vfx_accepts_particle_create(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_send_with_unity_instance(send_fn, unity_instance, tool_name, params):
+    async def fake_send_with_unity_instance(unity_instance, tool_name, params):
         captured["unity_instance"] = unity_instance
         captured["tool_name"] = tool_name
         captured["params"] = params

@@ -11,7 +11,7 @@ description: Install or repair the Claude Code CLI (claude) so MCP for Unity can
 You need the Claude Code CLI (`claude`) available on your system.
 
 :::caution Switching transport requires a restart
-If you change from `http` to `stdio` (or vice versa) in the MCP for Unity window, **restart Claude Code** for it to pick up the change.
+If you switch between HTTP Local and HTTP Remote in the MCP for Unity window, **restart Claude Code** for it to pick up the change.
 :::
 
 ## Recommended (native installers)

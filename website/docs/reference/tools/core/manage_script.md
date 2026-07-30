@@ -12,13 +12,13 @@ description: "Compatibility router for legacy script operations."
 
 ## Description
 
-Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits. Read-only action: read. Modifying actions: create, delete.
+Compatibility router for legacy script operations. Prefer apply_text_edits (ranges) or script_apply_edits (structured) for edits. Read-only action: read. Modifying action: create.
 
 ## Parameters
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `Literal['create', 'read', 'delete']` | yes | Perform CRUD operations on C# scripts. |
+| `action` | `Literal['create', 'read']` | yes | Perform CRUD operations on C# scripts. |
 | `name` | `str` | yes | Script name (no .cs extension) |
 | `path` | `str` | yes | Asset path (default: 'Assets/') |
 | `contents` | `str \| None` | — | Contents of the script to create |

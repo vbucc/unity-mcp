@@ -9,11 +9,11 @@ async def test_look_at_vector_target(monkeypatch):
     """look_at action forwards look_at_target as a vector."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"rotation": [0, 90, 0]}}
 
-    monkeypatch.setattr(manage_go_mod, "async_send_command_with_retry", fake_send)
+    monkeypatch.setattr(manage_go_mod, "send_with_unity_instance", fake_send)
 
     resp = await manage_go_mod.manage_gameobject(
         ctx=DummyContext(),
@@ -34,11 +34,11 @@ async def test_look_at_string_target(monkeypatch):
     """look_at action forwards look_at_target as a GO name string."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": True, "data": {"rotation": [0, 45, 0]}}
 
-    monkeypatch.setattr(manage_go_mod, "async_send_command_with_retry", fake_send)
+    monkeypatch.setattr(manage_go_mod, "send_with_unity_instance", fake_send)
 
     resp = await manage_go_mod.manage_gameobject(
         ctx=DummyContext(),
@@ -60,11 +60,11 @@ async def test_look_at_without_target_still_sends(monkeypatch):
     """look_at without look_at_target should still send the command (C# will error)."""
     captured = {}
 
-    async def fake_send(cmd, params, **kwargs):
+    async def fake_send(_unity_instance, cmd, params, **kwargs):
         captured["params"] = params
         return {"success": False, "message": "look_at_target is required"}
 
-    monkeypatch.setattr(manage_go_mod, "async_send_command_with_retry", fake_send)
+    monkeypatch.setattr(manage_go_mod, "send_with_unity_instance", fake_send)
 
     resp = await manage_go_mod.manage_gameobject(
         ctx=DummyContext(),

@@ -14,7 +14,6 @@ namespace MCPForUnity.Editor.Clients.Configurators
         public ClaudeCodeConfigurator() : base(new McpClient
         {
             name = "Claude Code",
-            SupportsHttpTransport = true,
         })
         { }
 

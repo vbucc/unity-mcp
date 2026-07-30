@@ -31,8 +31,6 @@ namespace MCPForUnity.Editor.Windows
         {
             // Boolean prefs
             { EditorPrefKeys.DebugLogs, EditorPrefType.Bool },
-            { EditorPrefKeys.UseHttpTransport, EditorPrefType.Bool },
-            { EditorPrefKeys.ResumeStdioAfterReload, EditorPrefType.Bool },
             { EditorPrefKeys.UseEmbeddedServer, EditorPrefType.Bool },
             { EditorPrefKeys.LockCursorConfig, EditorPrefType.Bool },
             { EditorPrefKeys.AutoRegisterEnabled, EditorPrefType.Bool },
@@ -46,10 +44,8 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.AllowInsecureRemoteHttp, EditorPrefType.Bool },
             
             // Integer prefs
-            { EditorPrefKeys.UnitySocketPort, EditorPrefType.Int },
             { EditorPrefKeys.ValidationLevel, EditorPrefType.Int },
             { EditorPrefKeys.LastUpdateCheck, EditorPrefType.String },
-            { EditorPrefKeys.LastStdIoUpgradeVersion, EditorPrefType.Int },
             { EditorPrefKeys.LastLocalHttpServerPid, EditorPrefType.Int },
             { EditorPrefKeys.LastLocalHttpServerPort, EditorPrefType.Int },
             

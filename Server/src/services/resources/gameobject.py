@@ -14,7 +14,6 @@ from models import MCPResponse
 from services.registry import mcp_for_unity_resource
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 def _normalize_response(response: dict | Any) -> MCPResponse:
@@ -140,7 +139,6 @@ async def get_gameobject(ctx: Context, instance_id: str) -> MCPResponse:
         return error
 
     response = await send_with_unity_instance(
-        async_send_command_with_retry,
         unity_instance,
         "get_gameobject",
         {"instanceID": id_int}
@@ -187,7 +185,6 @@ async def get_gameobject_components(
         return error
 
     response = await send_with_unity_instance(
-        async_send_command_with_retry,
         unity_instance,
         "get_gameobject_components",
         {
@@ -231,7 +228,6 @@ async def get_gameobject_component(
         return error
 
     response = await send_with_unity_instance(
-        async_send_command_with_retry,
         unity_instance,
         "get_gameobject_component",
         {

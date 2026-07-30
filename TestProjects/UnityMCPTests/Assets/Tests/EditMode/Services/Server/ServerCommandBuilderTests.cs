@@ -13,7 +13,6 @@ namespace MCPForUnityTests.Editor.Services.Server
     public class ServerCommandBuilderTests
     {
         private ServerCommandBuilder _builder;
-        private bool _savedUseHttpTransport;
         private string _savedHttpUrl;
 
         [SetUp]
@@ -21,7 +20,6 @@ namespace MCPForUnityTests.Editor.Services.Server
         {
             _builder = new ServerCommandBuilder();
             // Save current settings
-            _savedUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _savedHttpUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
         }
 
@@ -29,7 +27,6 @@ namespace MCPForUnityTests.Editor.Services.Server
         public void TearDown()
         {
             // Restore settings
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _savedUseHttpTransport);
             if (!string.IsNullOrEmpty(_savedHttpUrl))
             {
                 EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, _savedHttpUrl);
@@ -218,31 +215,11 @@ namespace MCPForUnityTests.Editor.Services.Server
 
         #region TryBuildCommand Tests
 
-        [Test]
-        public void TryBuildCommand_HttpDisabled_ReturnsFalse()
-        {
-            // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
-            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:8080");
-            EditorConfigurationCache.Instance.Refresh();
-
-            // Act
-            bool result = _builder.TryBuildCommand(out string fileName, out string arguments, out string displayCommand, out string error);
-
-            // Assert
-            Assert.IsFalse(result);
-            Assert.IsNull(fileName);
-            Assert.IsNull(arguments);
-            Assert.IsNull(displayCommand);
-            Assert.IsNotNull(error);
-            Assert.That(error, Does.Contain("HTTP").IgnoreCase);
-        }
 
         [Test]
         public void TryBuildCommand_RemoteUrl_ReturnsFalse()
         {
             // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://remote.server.com:8080");
             EditorConfigurationCache.Instance.Refresh();
 
@@ -259,7 +236,6 @@ namespace MCPForUnityTests.Editor.Services.Server
         public void TryBuildCommand_LocalUrl_ReturnsCommandOrError()
         {
             // Arrange
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://localhost:8080");
             EditorConfigurationCache.Instance.Refresh();
 

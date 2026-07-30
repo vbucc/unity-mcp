@@ -138,12 +138,6 @@ Tool visibility changes work differently depending on the transport mode:
 3. The server sends a `tools/list_changed` MCP notification to all connected client sessions.
 4. Already-connected clients (Claude Desktop, VS Code, etc.) automatically receive the updated tool list.
 
-**Stdio mode**:
-
-1. Toggles are persisted locally but cannot be pushed to the server (no WebSocket connection).
-2. The server starts with all groups enabled. After changing toggles, ask the AI to run `manage_tools` with `action='sync'` — this pulls the current tool states from Unity and syncs server visibility.
-3. Alternatively, restart the server to pick up changes.
-
 ### The `manage_tools` Meta-Tool
 
 The server exposes a built-in `manage_tools` tool (always visible, not group-gated) that AIs can call directly:
@@ -153,15 +147,14 @@ The server exposes a built-in `manage_tools` tool (always visible, not group-gat
 | `list_groups` | Lists all tool groups with their tools and enable/disable status |
 | `activate` | Enables a tool group by name (e.g., `group="vfx"`) |
 | `deactivate` | Disables a tool group by name |
-| `sync` | Pulls current tool states from Unity and syncs server visibility (essential for stdio mode) |
+| `sync` | Pulls current tool states from Unity and syncs server visibility on demand |
 | `reset` | Restores default tool visibility |
 
 ### When You Need to Reconfigure
 
 After toggling tools on/off, MCP clients need to learn about the changes:
 
-- **HTTP mode**: Changes propagate automatically via `tools/list_changed`. Most clients pick this up immediately. If a client doesn't, click **Reconfigure Clients** on the Tools tab, or go to Clients tab and click Configure.
-- **Stdio mode**: The server process needs to be told about changes. Either ask the AI to call `manage_tools(action='sync')`, or restart the MCP session. Click **Reconfigure Clients** to re-register all clients with updated config.
+Changes propagate automatically via `tools/list_changed`. Most clients pick this up immediately. If a client doesn't, click **Reconfigure Clients** on the Tools tab, or go to Clients tab and click Configure. You can also ask the AI to call `manage_tools(action='sync')` to re-pull the states from Unity.
 
 ## Running Tests
 
@@ -240,7 +233,7 @@ For compatibility PRs, note the exact editor versions you tested in the PR body.
 - **Unity still loads an old Git package**: close Unity, check `Packages/packages-lock.json`, then refresh Package Manager. If needed, remove only the stale `Library/PackageCache/com.coplaydev.unity-mcp@<hash>` folder while Unity is closed.
 - **Unity opens in Safe Mode after changing package source**: the package failed to compile before MCP can start. Fix the compile errors first; the MCP server cannot recover from package compile failures.
 - **Server changes are not picked up**: make sure **Server Source Override** points to your local `Server/` directory and **Dev Mode (Force fresh server install)** is enabled.
-- **Stdio tool visibility looks stale**: call `manage_tools(action="sync")` or restart the MCP session. HTTP mode can push `tools/list_changed` notifications automatically.
+- **Tool visibility looks stale**: call `manage_tools(action="sync")` or restart the MCP session. Unity normally pushes `tools/list_changed` automatically on reconnect.
 - **Multiple Unity editors are open**: use `mcpforunity://instances` and `set_active_instance` to confirm which project the server is targeting.
 ## Unity-version CI matrix
 

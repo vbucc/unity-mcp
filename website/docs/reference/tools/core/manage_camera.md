@@ -48,7 +48,7 @@ CAPTURE:
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `str` | yes | The camera action to perform. |
+| `action` | `Literal['ping', 'ensure_brain', 'get_brain_status', 'create_camera', 'set_target', 'set_priority', 'set_lens', 'set_body', 'set_aim', 'set_noise', 'add_extension', 'remove_extension', 'set_blend', 'force_camera', 'release_override', 'list_cameras', 'screenshot', 'screenshot_multiview']` | yes | The camera action to perform. |
 | `target` | `str \| None` | — | Target camera (name, path, or instance ID). |
 | `search_method` | `Literal['by_id', 'by_name', 'by_path'] \| None` | — | How to find target. |
 | `properties` | `dict[str, Any] \| str \| None` | — | Action-specific parameters (dict or JSON string). |

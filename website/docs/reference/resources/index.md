@@ -11,6 +11,30 @@ description: Auto-generated catalog of every MCP for Unity resource.
 
 Resources are read-only state surfaces exposed to MCP clients. Tools mutate; resources observe.
 
+## `animation_api`
+
+**URI:** `mcpforunity://animation-api`
+
+Schema and conventions for the manage_animation tool. Read this BEFORE editing AnimatorControllers — it lists per-action `properties` keys, condition-mode rules, AnyState aliases, path notation, and identity-preservation guidance.
+
+URI: mcpforunity://animation-api
+
+**Parameters:**
+
+- `_ctx` (`Context`, required) — 
+
+## `animation_controller`
+
+**URI:** `mcpforunity://animation/controller/{encoded_path}`
+
+Get the AnimatorController graph (states, transitions, parameters, layers) for a URL-encoded controller asset path. Use this BEFORE making edits to understand the current shape and avoid name collisions.
+
+URI: mcpforunity://animation/controller/{encoded_path}
+
+**Parameters:**
+
+- `encoded_path` (`str`, required) — 
+
 ## `cameras`
 
 **URI:** `mcpforunity://scene/cameras`
@@ -191,6 +215,13 @@ URI: mcpforunity://prefab/{encoded_path}
 **Parameters:**
 
 - `encoded_path` (`str`, required) — 
+
+## `profiler_snapshot`
+
+**URI:** `mcpforunity://profiler/snapshot`
+
+Instant profiler snapshot: estimated FPS, memory state, key rendering counters, GC alloc/frame, profiler state, active sessions.
+
 
 ## `project_info`
 

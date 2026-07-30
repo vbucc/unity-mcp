@@ -8,7 +8,7 @@ using UnityEngine;
 namespace MCPForUnity.Editor.Migrations
 {
     /// <summary>
-    /// Detects legacy embedded-server preferences and migrates configs to the new uvx/stdio path once.
+    /// Detects legacy embedded-server preferences and migrates configs to the uvx path once.
     /// </summary>
     [InitializeOnLoad]
     internal static class LegacyServerSrcMigration

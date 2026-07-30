@@ -14,8 +14,7 @@ from models import MCPResponse
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 import transport.unity_transport as unity_transport
-import transport.legacy.unity_connection as _legacy_conn
-from transport.legacy.unity_connection import _extract_response_reason
+from models.unity_response import extract_response_reason
 from services.state.external_changes_scanner import external_changes_scanner
 import services.resources.editor_state as editor_state
 
@@ -111,7 +110,6 @@ async def send_mutation(
             keep the original error response.
     """
     resp = await unity_transport.send_with_unity_instance(
-        _legacy_conn.async_send_command_with_retry,
         unity_instance,
         command,
         params,
@@ -120,7 +118,6 @@ async def send_mutation(
     if is_reloading_rejection(resp):
         await wait_for_editor_ready(ctx)
         resp = await unity_transport.send_with_unity_instance(
-            _legacy_conn.async_send_command_with_retry,
             unity_instance,
             command,
             params,
@@ -149,7 +146,6 @@ async def verify_edit_by_sha(
         return False
     try:
         verify = await unity_transport.send_with_unity_instance(
-            _legacy_conn.async_send_command_with_retry,
             unity_instance,
             "manage_script",
             {"action": "get_sha", "name": name, "path": path},
@@ -195,7 +191,6 @@ async def refresh_unity(
     # Don't retry on reload - refresh_unity triggers compilation/reload,
     # so retrying would cause multiple reloads (issue #577)
     response = await unity_transport.send_with_unity_instance(
-        _legacy_conn.async_send_command_with_retry,
         unity_instance,
         "refresh_unity",
         params,
@@ -210,7 +205,7 @@ async def refresh_unity(
     if not response_dict.get("success", True):
         hint = response_dict.get("hint")
         err = (response_dict.get("error") or response_dict.get("message") or "").lower()
-        reason = _extract_response_reason(response_dict)
+        reason = extract_response_reason(response_dict)
 
         # Connection closed/timeout during compile = refresh was triggered, Unity is reloading
         # This is SUCCESS, not failure - don't return error to prevent Claude Code from retrying

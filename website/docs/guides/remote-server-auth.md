@@ -20,7 +20,7 @@ See [Validation Contract](#validation-contract) for the full request/response sp
 
 ### Transport Mode
 
-API key authentication is only available when running with HTTP transport (`--transport http`). It has no effect in stdio mode.
+API key authentication applies to the remote-hosted HTTP scope (`--http-remote-hosted`). It has no effect for a local server.
 
 ## Server Configuration
 

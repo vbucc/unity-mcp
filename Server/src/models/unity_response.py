@@ -49,6 +49,48 @@ def normalize_unity_response(response: Any) -> Any:
     return normalized
 
 
+def extract_response_reason(resp: object) -> str | None:
+    """Extract a normalized (lowercase) reason string from a response.
+
+    Returns lowercase reason values to enable case-insensitive comparisons
+    by callers (e.g. is_reloading_response, refresh_unity).
+    """
+    if isinstance(resp, MCPResponse):
+        data = getattr(resp, "data", None)
+        if isinstance(data, dict):
+            reason = data.get("reason")
+            if isinstance(reason, str):
+                return reason.lower()
+        message_text = f"{resp.message or ''} {resp.error or ''}".lower()
+        if "reload" in message_text:
+            return "reloading"
+        return None
+
+    if isinstance(resp, dict):
+        if resp.get("state") == "reloading":
+            return "reloading"
+        data = resp.get("data")
+        if isinstance(data, dict):
+            reason = data.get("reason")
+            if isinstance(reason, str):
+                return reason.lower()
+        message_text = (resp.get("message") or resp.get("error") or "").lower()
+        if "reload" in message_text:
+            return "reloading"
+        return None
+
+    return None
+
+
+def is_reloading_response(resp: object) -> bool:
+    """Return True if the Unity response indicates the editor is reloading.
+
+    Supports both raw dict payloads from Unity and MCPResponse objects returned
+    by preflight checks or transport helpers.
+    """
+    return extract_response_reason(resp) == "reloading"
+
+
 def parse_resource_response(response: Any, typed_cls: Type[MCPResponse]) -> MCPResponse:
     """Parse a Unity response into a typed response class.
 

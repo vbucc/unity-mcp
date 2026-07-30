@@ -8,7 +8,6 @@ from fastmcp import Context
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
 from services.tools.utils import parse_json_payload, normalize_properties
 from services.tools.preflight import preflight
 
@@ -140,7 +139,6 @@ async def manage_components(
             params["properties"] = properties
 
         response = await send_with_unity_instance(
-            async_send_command_with_retry,
             unity_instance,
             "manage_components",
             params,

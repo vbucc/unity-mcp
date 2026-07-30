@@ -15,29 +15,19 @@ namespace MCPForUnityTests.Editor.Helpers
     // a client with no type override must still receive plain type:"http".
     public class ClientConfigFormatTests
     {
-        private const string UseHttpTransportPrefKey = EditorPrefKeys.UseHttpTransport;
 
-        private bool _hadHttpTransport;
-        private bool _originalHttpTransport;
 
         [SetUp]
         public void SetUp()
         {
-            _hadHttpTransport = EditorPrefs.HasKey(UseHttpTransportPrefKey);
-            _originalHttpTransport = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
 
             // Force HTTP transport so the remote/streamableHttp branch is exercised.
-            EditorPrefs.SetBool(UseHttpTransportPrefKey, true);
             EditorConfigCache.Instance.Refresh();
         }
 
         [TearDown]
         public void TearDown()
         {
-            if (_hadHttpTransport)
-                EditorPrefs.SetBool(UseHttpTransportPrefKey, _originalHttpTransport);
-            else
-                EditorPrefs.DeleteKey(UseHttpTransportPrefKey);
             EditorConfigCache.Instance.Refresh();
         }
 

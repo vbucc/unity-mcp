@@ -5,7 +5,7 @@ This tool lets the AI assistant (or user) discover available tool groups
 and selectively enable / disable them for the current session. Activating
 a group makes its tools appear in tool listings; deactivating hides them.
 
-Works on all transports (stdio, HTTP, SSE) via FastMCP 3.x native
+Uses FastMCP 3.x native
 per-session visibility.
 """
 from typing import Annotated, Any, Literal

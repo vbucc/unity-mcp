@@ -7,7 +7,6 @@ from services.registry import mcp_for_unity_tool
 from core.telemetry import is_telemetry_enabled, record_tool_usage
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
 
 @mcp_for_unity_tool(
     description="Controls and queries the Unity editor's state and settings. Read-only actions: telemetry_status, telemetry_ping. Modifying actions: play, pause, stop, set_active_tool, add_tag, remove_tag, add_layer, remove_layer, deploy_package, restore_package, undo, redo. For prefab editing (open/save/close prefab stage), use manage_prefabs. deploy_package copies the configured MCPForUnity source folder into the project's installed package location (triggers recompile, no confirmation dialog). restore_package reverts to the pre-deployment backup. undo/redo perform Unity editor undo/redo and return the affected group name. play accepts an optional 'scenario' (asset path or name) to boot a Unity Multiplayer Play Mode (MPPM) Play Mode Scenario; stop is wedge-safe when a scenario is active.",
@@ -50,7 +49,7 @@ async def manage_editor(
         params = {k: v for k, v in params.items() if v is not None}
 
         # Send command using centralized retry helper with instance routing
-        response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_editor", params)
+        response = await send_with_unity_instance(unity_instance, "manage_editor", params)
 
         # Preserve structured failure data; unwrap success into a friendlier shape
         if isinstance(response, dict) and response.get("success"):

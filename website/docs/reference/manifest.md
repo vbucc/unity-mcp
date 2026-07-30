@@ -48,7 +48,7 @@ Tells aggregators how to launch the Python server.
 - **`type`** — runtime family. Currently always `"python"`.
 - **`entry_point`** — file an aggregator would point a Python interpreter at if it weren't using `uvx`.
 - **`mcp_config.command`** — recommended launch command. `uvx` keeps the dependency tree managed without a global install.
-- **`mcp_config.args`** — invocation arguments. Default transport is `http`; pass `--transport stdio` to switch.
+- **`mcp_config.args`** — invocation arguments. HTTP is the only transport.
 - **`mcp_config.env`** — environment variables to set before launching (telemetry opt-outs, log levels, etc.).
 
 ## `tools`

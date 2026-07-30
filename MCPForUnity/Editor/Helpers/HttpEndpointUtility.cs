@@ -23,11 +23,32 @@ namespace MCPForUnity.Editor.Helpers
         private const string DefaultRemoteBaseUrl = "";
 
         /// <summary>
+        /// Per-process override for the endpoint this Editor *connects to*.
+        ///
+        /// EditorPrefs are shared by every project on this machine for a given Unity
+        /// version, so an ephemeral Editor (the local test harness, CI) must not write
+        /// its port there — it would repoint the developer's own Editor. Setting this
+        /// environment variable on the child process keeps the two isolated.
+        ///
+        /// Deliberately scoped to <see cref="GetBaseUrl"/> and NOT to
+        /// <see cref="GetLocalBaseUrl"/>: the latter feeds local-server *management*
+        /// (can we start one, what command launches it, is that URL local), and an
+        /// ephemeral Editor must never manage a server at all. Steering those with an
+        /// env var would both mislead them and make them untestable.
+        /// </summary>
+        internal const string ConnectionUrlEnvVar = "UNITY_MCP_HTTP_URL";
+
+        /// <summary>
         /// Returns the normalized base URL for the currently active HTTP scope.
         /// If the scope is "remote", returns the remote URL; otherwise returns the local URL.
         /// </summary>
         public static string GetBaseUrl()
         {
+            string envOverride = ReadConnectionUrlEnvOverride();
+            if (envOverride != null)
+            {
+                return NormalizeBaseUrl(envOverride, DefaultLocalBaseUrl, remoteScope: false);
+            }
             return IsRemoteScope() ? GetRemoteBaseUrl() : GetLocalBaseUrl();
         }
 
@@ -47,12 +68,28 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Returns the normalized local HTTP base URL (always reads local pref).
+        /// Returns the normalized local HTTP base URL (always reads the local pref).
         /// </summary>
         public static string GetLocalBaseUrl()
         {
             string stored = EditorPrefs.GetString(LocalPrefKey, DefaultLocalBaseUrl);
             return NormalizeBaseUrl(stored, DefaultLocalBaseUrl, remoteScope: false);
+        }
+
+        /// <summary>
+        /// Returns the connection-URL env override, or null when unset/blank.
+        /// </summary>
+        internal static string ReadConnectionUrlEnvOverride()
+        {
+            try
+            {
+                string value = System.Environment.GetEnvironmentVariable(ConnectionUrlEnvVar);
+                return string.IsNullOrWhiteSpace(value) ? null : value;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
@@ -137,13 +174,10 @@ namespace MCPForUnity.Editor.Helpers
 
         /// <summary>
         /// Returns the <see cref="ConfiguredTransport"/> that matches the current server-side
-        /// transport selection (Stdio, Http, or HttpRemote).
-        /// Centralises the 3-way determination so callers avoid duplicated logic.
+        /// transport scope (Http or HttpRemote).
         /// </summary>
         public static ConfiguredTransport GetCurrentServerTransport()
         {
-            bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-            if (!useHttp) return ConfiguredTransport.Stdio;
             return IsRemoteScope() ? ConfiguredTransport.HttpRemote : ConfiguredTransport.Http;
         }
 

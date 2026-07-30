@@ -23,15 +23,24 @@ BAKE (Edit mode only):
 - bake_get_settings, bake_set_settings
 - bake_create_light_probe_group, bake_create_reflection_probe, bake_set_probe_positions
 
-STATS:
+STATS (for deeper profiling — CPU hotspots, counter sampling, memory — use manage_profiler):
 - stats_get: Rendering counters (draw calls, batches, triangles, etc.)
 - stats_list_counters, stats_set_scene_debug, stats_get_memory
+- stats_get_texture_streaming: Mipmap-streaming + texture-memory telemetry (desired/target/current MB, streaming counts)
+
+RENDER GRAPH (URP/HDRP, Unity 6 / Core RP 17+, Render Graph mode):
+- render_graph_get: pass list, per-pass resource read/write, resource lifetimes, and (NRP compiler) pass merge/break reasons + load/store actions. Two-call capture: call once to arm, render a URP camera (Game/Scene view), call again to read. Pass stop=true to end the session.
 
 PIPELINE:
 - pipeline_get_info, pipeline_set_quality, pipeline_get_settings, pipeline_set_settings
 
 FEATURES (URP only):
-- feature_list, feature_add, feature_remove, feature_configure, feature_toggle, feature_reorder
+- feature_list: List renderer features with their properties on the active URP renderer
+- feature_add: Add a renderer feature by type (e.g. 'DecalRendererFeature')
+- feature_remove: Remove a renderer feature by name or index
+- feature_configure: Set properties on a renderer feature (name/index + properties dict)
+- feature_toggle: Enable/disable a renderer feature
+- feature_reorder: Reorder renderer feature execution
 
 SKYBOX / ENVIRONMENT:
 - skybox_get: Read all environment settings (material, ambient, fog, reflection, sun)
@@ -46,7 +55,7 @@ SKYBOX / ENVIRONMENT:
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `action` | `str` | yes | The graphics action to perform. |
+| `action` | `Literal['ping', 'volume_create', 'volume_add_effect', 'volume_set_effect', 'volume_remove_effect', 'volume_get_info', 'volume_set_properties', 'volume_list_effects', 'volume_create_profile', 'bake_start', 'bake_cancel', 'bake_status', 'bake_clear', 'bake_reflection_probe', 'bake_get_settings', 'bake_set_settings', 'bake_create_light_probe_group', 'bake_create_reflection_probe', 'bake_set_probe_positions', 'stats_get', 'stats_list_counters', 'stats_set_scene_debug', 'stats_get_memory', 'stats_get_texture_streaming', 'render_graph_get', 'pipeline_get_info', 'pipeline_set_quality', 'pipeline_get_settings', 'pipeline_set_settings', 'feature_list', 'feature_add', 'feature_remove', 'feature_configure', 'feature_toggle', 'feature_reorder', 'skybox_get', 'skybox_set_material', 'skybox_set_properties', 'skybox_set_ambient', 'skybox_set_fog', 'skybox_set_reflection', 'skybox_set_sun']` | yes | The graphics action to perform. |
 | `target` | `str \| None` | — | Target object name or instance ID. |
 | `effect` | `str \| None` | — | Effect type name (e.g., 'Bloom', 'Vignette'). |
 | `parameters` | `dict[str, Any] \| None` | — | Dict of parameter values. |
@@ -66,6 +75,12 @@ SKYBOX / ENVIRONMENT:
 | `size` | `list[float] \| None` | — | Probe/volume size [x,y,z]. |
 | `resolution` | `int \| None` | — | Probe resolution. |
 | `mode` | `str \| None` | — | Probe mode or debug mode. |
+| `capture` | `bool \| None` | — | stats_set_scene_debug: also capture a Scene View screenshot in the new debug mode (e.g. Overdraw). |
+| `graph` | `str \| None` | — | render_graph_get: render graph name to inspect (default: first registered). |
+| `execution` | `str \| None` | — | render_graph_get: execution/camera name to inspect (default: first). |
+| `stop` | `bool \| None` | — | render_graph_get: end the debug session (stops per-frame debug-data generation). |
+| `page_size` | `int \| None` | — | render_graph_get: passes per page (default 50). |
+| `cursor` | `int \| None` | — | render_graph_get: pass pagination cursor. |
 | `hdr` | `bool \| None` | — | HDR for reflection probes. |
 | `box_projection` | `bool \| None` | — | Box projection for reflection probes. |
 | `positions` | `list[list[float]] \| None` | — | Probe positions array. |

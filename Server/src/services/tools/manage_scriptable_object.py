@@ -19,7 +19,6 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from services.tools.utils import coerce_bool, parse_json_payload
 from transport.unity_transport import send_with_unity_instance
-from transport.legacy.unity_connection import async_send_command_with_retry
 
 
 @mcp_for_unity_tool(
@@ -85,7 +84,6 @@ async def manage_scriptable_object(
     params = {k: v for k, v in params.items() if v is not None}
 
     response = await send_with_unity_instance(
-        async_send_command_with_retry,
         unity_instance,
         "manage_scriptable_object",
         params,

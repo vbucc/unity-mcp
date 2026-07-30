@@ -25,23 +25,20 @@ namespace MCPForUnityTests.Editor.Services
         private TransportManager _manager;
         private TransportManager _savedManager;
         private bool _savedResumeFlag;
-        private bool _savedUseHttpTransport;
 
         [SetUp]
         public void SetUp()
         {
             _savedResumeFlag = SessionState.GetBool(HttpBridgeReloadHandler.ResumeSessionKey, false);
-            _savedUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _savedManager = MCPServiceLocator.TransportManager;
 
             SessionState.EraseBool(HttpBridgeReloadHandler.ResumeSessionKey);
 
             _fakeClient = new FakeTransportClient();
             _manager = new TransportManager();
-            _manager.Configure(() => _fakeClient, () => _fakeClient);
+            _manager.Configure(() => _fakeClient);
             MCPServiceLocator.Register(_manager);
 
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, true);
             EditorConfigurationCache.Instance.Refresh();
         }
 
@@ -50,7 +47,6 @@ namespace MCPForUnityTests.Editor.Services
         {
             // Stored-false and absent are indistinguishable: every read uses GetBool(key, false).
             SessionState.SetBool(HttpBridgeReloadHandler.ResumeSessionKey, _savedResumeFlag);
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _savedUseHttpTransport);
             EditorConfigurationCache.Instance.Refresh();
             MCPServiceLocator.Register(_savedManager);
         }
@@ -60,7 +56,7 @@ namespace MCPForUnityTests.Editor.Services
 
         private void StartBridge()
         {
-            Task<bool> start = _manager.StartAsync(TransportMode.Http);
+            Task<bool> start = _manager.StartAsync();
             Assert.IsTrue(start.IsCompleted && start.Result, "fake bridge should start synchronously");
         }
 
@@ -72,7 +68,7 @@ namespace MCPForUnityTests.Editor.Services
             HttpBridgeReloadHandler.OnBeforeAssemblyReloadCore(_manager);
 
             Assert.IsTrue(ResumeFlagSet, "flag should be set when the bridge was running");
-            Assert.IsFalse(_manager.IsRunning(TransportMode.Http), "bridge should be force-stopped before reload");
+            Assert.IsFalse(_manager.IsRunning(), "bridge should be force-stopped before reload");
         }
 
         [Test]
@@ -101,16 +97,6 @@ namespace MCPForUnityTests.Editor.Services
             Assert.IsTrue(ResumeFlagSet, "flag is only consumed when the resume actually succeeds");
         }
 
-        [Test]
-        public void AfterReloadCore_FlagSetStdioSelected_ClearsFlagAndSkips()
-        {
-            SessionState.SetBool(HttpBridgeReloadHandler.ResumeSessionKey, true);
-            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
-            EditorConfigurationCache.Instance.Refresh();
-
-            Assert.IsFalse(HttpBridgeReloadHandler.OnAfterAssemblyReloadCore());
-            Assert.IsFalse(ResumeFlagSet, "switching transports cancels the pending resume");
-        }
 
         [Test]
         public void Resume_Success_ConnectsAndClearsFlag()
@@ -120,7 +106,7 @@ namespace MCPForUnityTests.Editor.Services
             Task resume = HttpBridgeReloadHandler.ResumeHttpWithRetriesAsync(ZeroSchedule);
 
             Assert.IsTrue(resume.IsCompleted, "resume should complete synchronously with fakes");
-            Assert.IsTrue(_manager.IsRunning(TransportMode.Http));
+            Assert.IsTrue(_manager.IsRunning());
             Assert.AreEqual(1, _fakeClient.StartCalls);
             Assert.IsFalse(ResumeFlagSet);
         }
@@ -174,7 +160,7 @@ namespace MCPForUnityTests.Editor.Services
             StartBridge();
             HttpBridgeReloadHandler.OnBeforeAssemblyReloadCore(_manager);
             Assert.IsTrue(ResumeFlagSet);
-            Assert.IsFalse(_manager.IsRunning(TransportMode.Http));
+            Assert.IsFalse(_manager.IsRunning());
 
             // After pass 1: still compiling, so the resume tick defers — flag must not be consumed.
             Assert.IsTrue(HttpBridgeReloadHandler.OnAfterAssemblyReloadCore());
@@ -189,7 +175,7 @@ namespace MCPForUnityTests.Editor.Services
             Assert.IsTrue(HttpBridgeReloadHandler.OnAfterAssemblyReloadCore());
             Task resume = HttpBridgeReloadHandler.ResumeHttpWithRetriesAsync(ZeroSchedule);
             Assert.IsTrue(resume.IsCompleted, "resume should complete synchronously with fakes");
-            Assert.IsTrue(_manager.IsRunning(TransportMode.Http));
+            Assert.IsTrue(_manager.IsRunning());
             Assert.IsFalse(ResumeFlagSet);
         }
     }

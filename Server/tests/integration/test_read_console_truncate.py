@@ -22,7 +22,7 @@ async def test_read_console_full_default(monkeypatch):
 
     captured = {}
 
-    async def fake_send(_cmd, params, **_kwargs):
+    async def fake_send(_unity_instance, _cmd, params, **_kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -33,7 +33,7 @@ async def test_read_console_full_default(monkeypatch):
     import services.tools.read_console
     monkeypatch.setattr(
         services.tools.read_console,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -53,7 +53,7 @@ async def test_read_console_truncated(monkeypatch):
 
     captured = {}
 
-    async def fake_send(_cmd, params, **_kwargs):
+    async def fake_send(_unity_instance, _cmd, params, **_kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -64,7 +64,7 @@ async def test_read_console_truncated(monkeypatch):
     import services.tools.read_console
     monkeypatch.setattr(
         services.tools.read_console,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -82,7 +82,7 @@ async def test_read_console_default_count(monkeypatch):
 
     captured = {}
 
-    async def fake_send(_cmd, params, **_kwargs):
+    async def fake_send(_unity_instance, _cmd, params, **_kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -93,7 +93,7 @@ async def test_read_console_default_count(monkeypatch):
     import services.tools.read_console
     monkeypatch.setattr(
         services.tools.read_console,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -112,7 +112,7 @@ async def test_read_console_paging(monkeypatch):
 
     captured = {}
 
-    async def fake_send(_cmd, params, **_kwargs):
+    async def fake_send(_unity_instance, _cmd, params, **_kwargs):
         captured["params"] = params
         # Simulate Unity returning paging info matching C# structure
         page_size = params.get("pageSize", 10)
@@ -141,7 +141,7 @@ async def test_read_console_paging(monkeypatch):
     import services.tools.read_console
     monkeypatch.setattr(
         services.tools.read_console,
-        "async_send_command_with_retry",
+        "send_with_unity_instance",
         fake_send,
     )
 
@@ -179,7 +179,7 @@ async def test_read_console_types_json_string(monkeypatch):
 
     captured = {}
 
-    async def fake_send_with_unity_instance(_send_fn, _unity_instance, _command_type, params, **_kwargs):
+    async def fake_send_with_unity_instance(_unity_instance, _command_type, params, **_kwargs):
         captured["params"] = params
         return {
             "success": True,
@@ -222,7 +222,7 @@ async def test_read_console_types_validation(monkeypatch):
 
     captured = {}
 
-    async def fake_send_with_unity_instance(_send_fn, _unity_instance, _command_type, params, **_kwargs):
+    async def fake_send_with_unity_instance(_unity_instance, _command_type, params, **_kwargs):
         captured["params"] = params
         return {"success": True, "data": {"lines": []}}
 

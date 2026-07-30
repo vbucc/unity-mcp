@@ -24,7 +24,7 @@ Add, remove, or set properties on components attached to GameObjects. Actions: a
 | `search_method` | `Literal['by_id', 'by_name', 'by_path'] \| None` | — | How to find the target GameObject |
 | `property` | `str \| None` | — | Property name to set (for set_property action) |
 | `value` | `str \| int \| float \| bool \| dict[Any] \| list[Any] \| None` | — | Value to set (for set_property action). For object references: instance ID (int), asset path (string), or {"guid": "..."} / {"path": "..."}. For Sprite sub-assets: {"guid": "...", "spriteName": "<name>"} or {"guid": "...", "fileID": <id>}. Single-sprite textures auto-resolve. |
-| `properties` | `dict[str, Any] \| str \| None` | — | Dictionary of property names to values. Example: {"mass": 5.0, "useGravity": false} |
+| `properties` | `dict[str, Any] \| str \| None` | — | Dictionary of property names to values. Example: {"mass": 5.0, "useGravity": false}. For object references: {"player": {"name": "Player"}} or with component filter: {"targetHealth": {"name": "Player", "component": "Health"}}. Also accepts {"instanceID": 123}, {"guid": "..."}, {"path": "Assets/..."}. |
 | `component_index` | `int \| None` | — | Zero-based index to select which component when multiple of the same type exist. Use the components resource to discover indices. If omitted, targets the first instance. |
 
 ## Returns

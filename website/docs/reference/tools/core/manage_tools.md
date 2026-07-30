@@ -12,14 +12,16 @@ description: "Manage which tool groups are visible in this session."
 
 ## Description
 
-Manage which tool groups are visible in this session. Actions: list_groups (show all groups and their status), activate (enable a group), deactivate (disable a group), sync (refresh visibility from Unity Editor's toggle states), reset (restore defaults). Activating a group makes its tools appear; deactivating hides them. Use sync after toggling tools in the Unity Editor GUI.
+Manage which tool groups are visible in this session. Additional capabilities are in disabled groups — activate them when needed.
+Groups: docs (API reflection & docs lookup), scripting_ext (execute_code + ScriptableObjects), vfx (particles, VFX Graph, shaders), animation (Animator, AnimatorController, AnimationClips), ui (UI Toolkit UXML/USS), testing (test runner), probuilder (3D modeling), auditor (static analysis), profiling (Profiler & Frame Debugger).
+Actions: list_groups, activate, deactivate, sync, reset. Activating a group makes its tools appear; deactivating hides them.
 
 ## Parameters
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `action` | `Literal['list_groups', 'activate', 'deactivate', 'sync', 'reset']` | yes | Action to perform. |
-| `group` | `str \| None` | — | Group name (required for activate / deactivate). Valid groups: animation, asset_gen, core, docs, probuilder, profiling, scripting_ext, testing, ui, vfx |
+| `group` | `str \| None` | — | Group name (required for activate / deactivate). Valid groups: animation, asset_gen, auditor, core, docs, probuilder, profiling, scripting_ext, testing, ui, vfx |
 
 ## Returns
 
