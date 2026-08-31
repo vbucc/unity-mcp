@@ -784,6 +784,18 @@ class TestStartUtfTestsRunning:
         job_id, _ = lh._start_utf(fake_send, "PlayMode", "inst@hash", 120000, 1, 50)
         assert job_id == "7"
 
+    def test_discards_untitled_scenes(self):
+        """The smoke leg dirties the untitled scene; run_tests refuses to start on that
+        unless the caller opts into discarding it (no Save dialog exists headlessly)."""
+        seen = {}
+
+        def fake_send(cmd, params, **kw):
+            seen.update(params)
+            return {"success": True, "data": {"job_id": "J1"}}
+
+        lh._start_utf(fake_send, "EditMode", "inst@hash", None, 1, 50)
+        assert seen.get("discardUntitledScenes") is True
+
 
 # ===========================================================================
 # UTF poll/start transport resilience. Regression: a live EditMode run blocks

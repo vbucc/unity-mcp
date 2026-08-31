@@ -350,8 +350,10 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         /// EditorApplication.isPlayingOrWillChangePlaymode which Unity holds true for the entire Play
         /// session. Drives the private field via reflection and invokes the private BuildSnapshot directly
         /// (poking the field alone would not rebuild the cached snapshot). The is_changing assertions are
-        /// independent of the surrounding editor state; the phase assertion holds because EditMode tests run
-        /// in a quiescent editor (not compiling/importing/reloading, and TestRunStatus is MCP-only).
+        /// independent of the surrounding editor state, but the phase assertion is not: "running_tests"
+        /// outranks "playmode_transition", and TestRunStatus.IsRunning is true whenever this suite was
+        /// started through the MCP run_tests tool (the local harness does exactly that). So the test drives
+        /// that input too, rather than assuming a quiescent editor.
         /// </summary>
         [Test]
         public void EditorStateCache_IsChanging_TracksTransitionWindowNotWholeSession()
@@ -361,10 +363,17 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             Assert.IsNotNull(field, "Could not find _isPlayModeChanging field");
             var build = type.GetMethod("BuildSnapshot", BindingFlags.NonPublic | BindingFlags.Static);
             Assert.IsNotNull(build, "Could not find BuildSnapshot method");
+            var runningField = typeof(TestRunStatus).GetField("_isRunning", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(runningField, "Could not find TestRunStatus._isRunning field");
 
             bool original = (bool)field.GetValue(null);
+            bool originalRunning = (bool)runningField.GetValue(null);
             try
             {
+                // Safe to poke: a [Test] body runs synchronously inside one editor frame, and
+                // TestRunStatus is only read from main-thread callbacks, so nothing observes the
+                // forced value before the finally restores it.
+                runningField.SetValue(null, false);
                 field.SetValue(null, true);
                 var changing = (JObject)build.Invoke(null, new object[] { "test" });
                 Assert.IsTrue((bool)changing["editor"]["play_mode"]["is_changing"],
@@ -380,6 +389,7 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             finally
             {
                 field.SetValue(null, original);
+                runningField.SetValue(null, originalRunning);
             }
         }
 
