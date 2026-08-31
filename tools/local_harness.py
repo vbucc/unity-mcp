@@ -1347,7 +1347,11 @@ def run_smoke_leg(instance_id: str, junit_path: Path, max_retries: int, retry_ms
 def _start_utf(send, mode: str, instance_id: str, init_timeout_ms: int | None,
                max_retries: int, retry_ms: int) -> tuple[str | None, dict[str, Any] | Any]:
     """Issue run_tests; return (job_id, raw_start_response). Gates on result.success."""
-    params: dict[str, Any] = {"mode": mode, "includeFailedTests": True}
+    # discardUntitledScenes: the smoke leg dirties the untitled scene (it creates and
+    # deletes GameObjects) and run_tests fail-fasts on that, because an interactive editor
+    # would wedge on a native Save dialog. A headless gate has no dialog to wedge on.
+    params: dict[str, Any] = {"mode": mode, "includeFailedTests": True,
+                              "discardUntitledScenes": True}
     if init_timeout_ms is not None:
         params["initTimeout"] = init_timeout_ms
     # tests_running back-off: a "tests already running" reply is an ErrorResponse

@@ -492,10 +492,11 @@ namespace MCPForUnity.Editor.Tools
         /// Splits a Unity log message into its body and appended stack trace.
         /// Unity concatenates both, separated by newlines, so the body may span
         /// several lines before the stack trace begins.
+        /// Internal for tests (via InternalsVisibleTo).
         /// </summary>
         /// <param name="fullMessage">The complete log message including any appended stack trace.</param>
         /// <returns>The message body (line endings normalized to "\n", internal blank lines preserved) and the stack trace, or null when none is found.</returns>
-        private static (string body, string stackTrace) SplitMessageAndStackTrace(string fullMessage)
+        internal static (string body, string stackTrace) SplitMessageAndStackTrace(string fullMessage)
         {
             if (string.IsNullOrEmpty(fullMessage))
                 return (fullMessage, null);
