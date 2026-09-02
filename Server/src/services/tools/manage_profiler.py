@@ -94,7 +94,11 @@ EVENT_ACTIONS = [a for a in ALL_ACTIONS if a.startswith("event_")]
         "Pairs with deep_profiling_set for managed per-method detail. Catches transient worker-thread bursts "
         "that hotspots_get/gc_track (trailing window, thread 0) miss."
     ),
-    annotations=ToolAnnotations(title="Manage Profiler"),
+    annotations=ToolAnnotations(
+        title="Manage Profiler",
+        destructiveHint=False,
+        readOnlyHint=False,
+    ),
 )
 async def manage_profiler(
     ctx: Context,

@@ -39,7 +39,11 @@ STATUS_ACTIONS = ["status"]
         "RULES: list_rules, add_rule (suppress or change severity), remove_rule\n\n"
         "STATUS: status (availability, report loaded, counts)"
     ),
-    annotations=ToolAnnotations(title="Manage Project Auditor"),
+    annotations=ToolAnnotations(
+        title="Manage Project Auditor",
+        destructiveHint=False,
+        readOnlyHint=False,
+    ),
 )
 async def manage_project_auditor(
     ctx: Context,
