@@ -508,7 +508,7 @@ namespace MCPForUnity.Editor.Services
                 {
                     long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     long initTimeout = job.InitTimeoutMs > 0 ? job.InitTimeoutMs : DefaultInitializationTimeoutMs;
-                    if (!EditorApplication.isCompiling && !EditorApplication.isUpdating && now - job.StartedUnixMs > initTimeout)
+                    if (!EditorStateCache.GetActualIsCompiling() && !EditorApplication.isUpdating && now - job.StartedUnixMs > initTimeout)
                     {
                         McpLog.Warn($"[TestJobManager] Job {jobId} failed to initialize within {initTimeout}ms, auto-failing");
                         job.Status = TestJobStatus.Failed;
@@ -595,7 +595,7 @@ namespace MCPForUnity.Editor.Services
                 return "editor_unfocused";
             }
 
-            if (EditorApplication.isCompiling)
+            if (EditorStateCache.GetActualIsCompiling())
             {
                 return "compiling";
             }

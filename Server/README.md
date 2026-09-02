@@ -46,7 +46,7 @@ uvx --from mcpforunityserver mcp-for-unity --transport http --http-url http://lo
 Use this to run the latest released version from the repository. Change the version to `main` to run the latest unreleased changes from the repository.
 
 ```bash
-uvx --from "git+https://github.com/CoplayDev/unity-mcp@v10.1.0-fork.1#subdirectory=Server" mcp-for-unity
+uvx --from "git+https://github.com/Studio-Pronto/unity-mcp#subdirectory=Server" mcp-for-unity
 ```
 
 Then point your MCP client at `http://localhost:8080/mcp`, as in Option 1.
